@@ -1,59 +1,110 @@
-# NewsMapFrontend
+# News Map Frontend (Angular + Material + Leaflet + Appwrite)
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 21.0.5.
+Frontend para un **mapa mundi de noticias** con marcadores sobre un mapa (Leaflet) y una UI moderna (Angular Material).
+El backend previsto es **Appwrite 1.8.x** usando **GeoJSON** para almacenar y consultar noticias georreferenciadas.
 
-## Development server
+## Stack
 
-To start a local development server, run:
+- Angular (standalone)
+- Angular Material
+- Leaflet
+- Appwrite JS SDK
+- pnpm
 
-```bash
-ng serve
-```
+## Requisitos
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+- Node.js (LTS recomendado)
+- pnpm (recomendado)
 
-## Code scaffolding
-
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
-
-```bash
-ng generate component component-name
-```
-
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
+Instalar pnpm:
 
 ```bash
-ng generate --help
+npm i -g pnpm
 ```
 
-## Building
+## Configuración (Appwrite)
 
-To build the project run:
+Configura el endpoint y el projectId en:
+
+- `src/environments/environment.ts` (dev)
+- `src/environments/environment.prod.ts` (prod)
+
+Ejemplo:
+
+```ts
+export const environment = {
+  production: false,
+  appwrite: {
+    endpoint: "http://localhost/v1",
+    projectId: "YOUR_PROJECT_ID"
+  }
+};
+```
+
+En la consola de Appwrite:
+- Project → Platforms → **Add platform → Web**
+- Añade como host permitido: `http://localhost:4200` (o el que uses)
+
+## Instalación
 
 ```bash
-ng build
+pnpm install
 ```
 
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
-
-## Running unit tests
-
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
+## Ejecutar en desarrollo
 
 ```bash
-ng test
+pnpm start
 ```
 
-## Running end-to-end tests
+Abrir:
+- http://localhost:4200
 
-For end-to-end (e2e) testing, run:
+## Build
 
 ```bash
-ng e2e
+pnpm build
 ```
 
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
+Los artefactos se generan en `dist/`.
 
-## Additional Resources
+## Estructura sugerida
 
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+```
+src/app
+  core/
+    appwrite/         # cliente SDK de Appwrite
+    auth/             # identidad (login/logout, store/estado de usuario)
+    ui/               # toolbar y componentes base
+  features/
+    news-map/         # mapa y funcionalidades de noticias
+  shared/             # modelos y utilidades comunes
+```
+
+## Flujo de autenticación (resumen)
+
+- Click en **Login** (toolbar)
+- Diálogo de login (email/password u OAuth)
+- Al autenticar, se recupera el usuario desde Appwrite (`account.get()`)
+- El usuario se guarda en el estado global de la app
+
+## Scripts útiles
+
+```bash
+pnpm start
+pnpm test
+pnpm lint
+pnpm build
+```
+
+## Roadmap
+
+- [ ] Consultas GeoJSON en Appwrite y pintado de marcadores
+- [ ] Filtros: fecha/proveedor/tags/radio/viewport
+- [ ] Clustering de marcadores
+- [ ] Panel lateral con lista y detalle de noticia
+- [ ] Favoritos por usuario
+
+## Licencia
+
+Este proyecto está licenciado bajo **Apache License 2.0**. Ver [LICENSE](LICENSE).

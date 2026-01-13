@@ -1,0 +1,17 @@
+<mat-toolbar color="primary">
+  <span>🌍 News Map</span>
+  <span class="spacer"></span>
+
+  <button mat-icon-button>
+    <mat-icon>filter_list</mat-icon>
+  </button>
+
+  @if( user() ) {
+      <span>{{ user()?.name }}</span>
+      <button mat-button (click)="logout()">Salir</button>
+  } @else {
+      <button mat-raised-button color="accent" (click)="openLogin()">
+        Login
+      </button>
+  }
+</mat-toolbar>

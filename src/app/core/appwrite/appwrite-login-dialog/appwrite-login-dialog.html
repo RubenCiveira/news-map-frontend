@@ -1,0 +1,90 @@
+<div class="login-dialog-container">
+  <h1 mat-dialog-title>
+    <ng-container *ngIf="layer == 'email'">Iniciar sesión</ng-container>
+    <ng-container *ngIf="layer == 'register'">Register</ng-container>
+    <ng-container *ngIf="layer == 'reset'">Password olvidada</ng-container>
+  </h1>
+
+  <div mat-dialog-content class="login-container">
+    <!-- Email login form -->
+    <ng-container *ngIf="canUseEmail() && layer == 'email'">
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Email</mat-label>
+        <input matInput [(ngModel)]="email" type="email" placeholder="ejemplo@correo.com" />
+        <mat-icon matSuffix>email</mat-icon>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Contraseña</mat-label>
+        <input matInput [(ngModel)]="password" type="password" />
+        <mat-icon matSuffix>lock</mat-icon>
+      </mat-form-field>
+
+      <div class="pre-button link" (click)="showReset()">Forgot password?</div>
+      <div class="button-row">
+        <button mat-raised-button class="main-button" (click)="login('email')">
+          Iniciar sesión
+        </button>
+      </div>
+      <div class="post-button">
+        Dont have an account: <span class="link" (click)="showRegister()">Sigup</span>
+      </div>
+    </ng-container>
+
+    <ng-container *ngIf="canUseEmail() && layer == 'register'">
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Email</mat-label>
+        <input matInput [(ngModel)]="email" type="email" placeholder="ejemplo@correo.com" />
+        <mat-icon matSuffix>email</mat-icon>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Contraseña</mat-label>
+        <input matInput [(ngModel)]="password" type="password" />
+        <mat-icon matSuffix>lock</mat-icon>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Repetir contraseña</mat-label>
+        <input matInput [(ngModel)]="confirmPassword" type="password" />
+        <mat-icon matSuffix>lock</mat-icon>
+      </mat-form-field>
+
+      <div class="pre-button link" (click)="showLogin()">Back email</div>
+
+      <div class="button-row">
+        <button mat-raised-button class="main-button" (click)="login('register')">
+          Iniciar sesión
+        </button>
+      </div>
+    </ng-container>
+
+    <ng-container *ngIf="canUseEmail() && layer == 'reset'">
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Email</mat-label>
+        <input matInput [(ngModel)]="email" type="email" placeholder="ejemplo@correo.com" />
+        <mat-icon matSuffix>email</mat-icon>
+      </mat-form-field>
+
+      <div class="pre-button link" (click)="showLogin()">Back email</div>
+
+      <div class="button-row">
+        <button mat-raised-button class="main-button" (click)="login('recover')">
+          Recuperar sesión
+        </button>
+      </div>
+    </ng-container>
+
+    <!-- Provider selection -->
+    <div class="provider-list">
+      <ng-container *ngFor="let providerId of availableProviders">
+        <div *ngIf="providerId !== 'email'">
+          <button mat-raised-button (click)="login(providerId)">
+            <mat-icon>{{ getProviderIcon(providerId) }}</mat-icon>
+            {{ getProviderName(providerId) }}
+          </button>
+        </div>
+      </ng-container>
+    </div>
+  </div>
+</div>

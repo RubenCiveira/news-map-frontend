@@ -1,0 +1,29 @@
+.login-container {
+    display: flex;
+    flex-direction: column;
+}
+.button-row {
+    width: 100%;
+}
+.pre-button {
+    text-align: left;
+}
+.post-button {
+    text-align: right;
+}
+.link {
+    cursor: pointer;
+    color: blue;
+}
+.main-button {
+    background-color: #000077;
+    color: white;
+}
+.button-row button {
+    width: 100%;
+    margin: 15px 0;
+}
+.provider-list button {
+    width: 100%;
+    margin: 10px 0;
+}
