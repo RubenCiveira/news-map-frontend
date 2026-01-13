@@ -10,6 +10,8 @@ import { GeoService } from '../../../core/appwrite/geo.service';
 })
 export class MapComponent implements AfterViewInit {
   private map!: L.Map;
+  private readonly DEFAULT_CENTER: L.LatLngExpression = [40.4168, -3.7038]; // Madrid
+  private readonly DEFAULT_ZOOM = 10;
 
   constructor(private geo: GeoService) {}
 
@@ -19,7 +21,29 @@ export class MapComponent implements AfterViewInit {
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors',
     }).addTo(this.map);
+    this.tryCenterOnBrowserLocation();
+    this.getRegions();
+  }
 
+  private tryCenterOnBrowserLocation() {
+    if (!navigator.geolocation) return;
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const center: L.LatLngExpression = [pos.coords.latitude, pos.coords.longitude];
+        this.map.setView(center, this.DEFAULT_ZOOM, { animate: true });
+      },
+      // Si el usuario deniega o falla → Madrid se queda
+      () => {},
+      {
+        enableHighAccuracy: true,
+        timeout: 5000,
+        maximumAge: 60_000,
+      }
+    );
+  }
+
+  private async getRegions() {
     const regions = await this.geo.getAllRegions();
 
     for (const region of regions) {
@@ -35,7 +59,7 @@ export class MapComponent implements AfterViewInit {
             .addTo(this.map)
             .bindPopup(region.title);
         } catch (fail) {
-          console.error('FAIL FOR ' + region.title );
+          console.error('FAIL FOR ' + region.title);
         }
       } else {
         console.log('SKIP');
