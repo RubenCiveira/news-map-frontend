@@ -10,7 +10,16 @@ export class GeoService {
 
   readonly databaseId = '696615f8003aca7fbb8b';
   readonly layersTable = 'layers';
+  readonly layerGroupsTable = 'layerGroups';
   readonly regionsTable = 'regions';
+
+  async getLayerGroups() {
+    const res = await this.tables.listRows({
+      databaseId: this.databaseId,
+      tableId: this.layerGroupsTable,
+    });
+    return res.rows;
+  }
 
   async getLayers() {
     const res = await this.tables.listRows({

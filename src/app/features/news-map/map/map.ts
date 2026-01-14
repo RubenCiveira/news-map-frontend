@@ -47,6 +47,7 @@ export class MapComponent implements AfterViewInit, OnDestroy {
 
   // private regionsLayer = L.layerGroup();
   private regionsLayer: any = {};
+  private allLayers: any = {};
 
   private selectedLayerIds = new Set<string>();
 
@@ -67,27 +68,37 @@ export class MapComponent implements AfterViewInit, OnDestroy {
         distinctUntilChanged((a, b) => a.equals(b)),
         switchMap((bbox) => {
           const values: Observable<any>[] = [];
-          Object.keys(this.regionsLayer).forEach(prev => {
-            if( !this.selectedLayerIds.has(prev) ) {
+          const allLayersToView = new Set<string>();
+          this.selectedLayerIds.forEach((groups) => {
+            if (this.allLayers[groups]) {
+              this.allLayers[groups].forEach((layerInfo: any) => {
+                const layer = layerInfo.$id;
+                if (this.isLayerEnabled(layerInfo, this.map.getZoom())) {
+                  allLayersToView.add(layerInfo.$id);
+                }
+              });
+            }
+          });
+          Object.keys(this.regionsLayer).forEach((prev) => {
+            if (!allLayersToView.has(prev)) {
               this.regionsLayer[prev].remove();
               delete this.regionsLayer[prev];
             }
           });
-          this.selectedLayerIds.forEach((layer) => {
+          allLayersToView.forEach((layer) => {
             const previous = !!this.regionsLayer[layer];
-            values.push(
-              this.geo.getRegionsInViewport(bbox.bounds, layer, !previous).pipe(
-                catchError((err) => EMPTY),
-                tap((regions) => {
-                  if (this.regionsLayer[layer]) {
-                    this.regionsLayer[layer].remove();
-                  }
-                  this.regionsLayer[layer] = L.layerGroup();
-                  this.regionsLayer[layer].addTo(this.map);
-                  this.renderRegions(regions, this.regionsLayer[layer]);
-                })
-              )
+            const call = this.geo.getRegionsInViewport(bbox.bounds, layer, !previous).pipe(
+              catchError((err) => EMPTY),
+              tap((regions) => {
+                if (this.regionsLayer[layer]) {
+                  this.regionsLayer[layer].remove();
+                }
+                this.regionsLayer[layer] = L.layerGroup();
+                this.regionsLayer[layer].addTo(this.map);
+                this.renderRegions(regions, this.regionsLayer[layer]);
+              })
             );
+            values.push(call);
           });
           return merge(...values);
         })
@@ -96,6 +107,14 @@ export class MapComponent implements AfterViewInit, OnDestroy {
     this.reloadRegions();
     this.map.on('moveend zoomend', () => {
       this.reloadRegions();
+    });
+    const layers = await this.geo.getLayers();
+    layers.forEach((layer) => {
+      const group = (layer as any).layerGroup;
+      if (!this.allLayers[group]) {
+        this.allLayers[group] = [];
+      }
+      this.allLayers[group].push(layer);
     });
   }
 
@@ -141,7 +160,7 @@ export class MapComponent implements AfterViewInit, OnDestroy {
       ],
       overlays: [], // si quieres capas Leaflet locales
       dynamicLayersProvider: async () => {
-        const layers = await this.geo.getLayers();
+        const layers = await this.geo.getLayerGroups();
         return layers.map((l: any) => l);
       },
       onDynamicChange: (ids) => {
@@ -174,5 +193,11 @@ export class MapComponent implements AfterViewInit, OnDestroy {
         console.log('SKIP');
       }
     }
+  }
+
+  private isLayerEnabled(layer: any, zoom: number) {
+    if (layer.zoomMin != undefined && zoom < layer.zoomMin) return false;
+    if (layer.zoomMax != undefined && zoom > layer.zoomMax) return false;
+    return true;
   }
 }
