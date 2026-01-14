@@ -21,14 +21,12 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
           run_install: false
 
       # 2) Configura Node y cachea pnpm usando pnpm-lock.yaml
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
           cache: pnpm
 
       # 3) Verificación rápida (útil para diagnosticar)
