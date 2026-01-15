@@ -45,13 +45,12 @@ export class MapComponent implements AfterViewInit, OnDestroy {
   private readonly DEFAULT_CENTER: L.LatLngExpression = [40.4168, -3.7038]; // Madrid
   private readonly DEFAULT_ZOOM = 6;
 
-  // private regionsLayer = L.layerGroup();
-  private regionsLayer: any = {};
   private allLayers: any = {};
+  private regionsLayer?: L.LayerGroup<any>;
 
   private selectedLayerIds = new Set<string>();
 
-  private viewport$ = new Subject<ViewPort>(); // new Subject<L.LatLngBounds>();
+  private viewport$ = new Subject<ViewPort>();
 
   constructor(private geo: GeoService) {}
 
@@ -72,34 +71,29 @@ export class MapComponent implements AfterViewInit, OnDestroy {
           this.selectedLayerIds.forEach((groups) => {
             if (this.allLayers[groups]) {
               this.allLayers[groups].forEach((layerInfo: any) => {
-                const layer = layerInfo.$id;
                 if (this.isLayerEnabled(layerInfo, this.map.getZoom())) {
                   allLayersToView.add(layerInfo.$id);
                 }
               });
             }
           });
-          Object.keys(this.regionsLayer).forEach((prev) => {
-            if (!allLayersToView.has(prev)) {
-              this.regionsLayer[prev].remove();
-              delete this.regionsLayer[prev];
-            }
-          });
-          allLayersToView.forEach((layer) => {
-            const previous = !!this.regionsLayer[layer];
-            const call = this.geo.getRegionsInViewport(bbox.bounds, layer, !previous).pipe(
+          const previous = !!this.regionsLayer;
+          if( allLayersToView.size > 0 ) {
+            const call = this.geo.getRegionsInViewport(bbox.bounds, allLayersToView, !previous).pipe(
               catchError((err) => EMPTY),
               tap((regions) => {
-                if (this.regionsLayer[layer]) {
-                  this.regionsLayer[layer].remove();
+                if (this.regionsLayer) {
+                  this.regionsLayer.remove();
                 }
-                this.regionsLayer[layer] = L.layerGroup();
-                this.regionsLayer[layer].addTo(this.map);
-                this.renderRegions(regions, this.regionsLayer[layer]);
+                this.regionsLayer = L.layerGroup();
+                this.regionsLayer.addTo(this.map);
+                this.renderRegions(regions, this.regionsLayer);
               })
             );
             values.push(call);
-          });
+          } else if (this.regionsLayer) {
+              this.regionsLayer.remove();
+          }
           return merge(...values);
         })
       )

@@ -81,15 +81,10 @@ export function createLayersButtonControl(opts: {
         console.log("IN " + zoom);
 
         layers.forEach((layer) => {
-          const enabled = isLayerEnabled(layer, zoom);
-
-          console.log("LAYER " + layer.name + " IS "  + enabled);
           const label = document.createElement('label');
-          label.className = enabled ? '' : 'disabled';
 
           const input = document.createElement('input');
           input.type = 'checkbox';
-          input.disabled = !enabled;
           input.checked = selectedDynamic.has(layer.$id);
 
           input.onchange = () => {
@@ -98,14 +93,11 @@ export function createLayersButtonControl(opts: {
             } else {
               selectedDynamic.delete(layer.$id);
             }
-
-            console.log('[LayersControl] selected:', Array.from(selectedDynamic));
             opts.onDynamicChange(new Set(selectedDynamic));
           };
 
           const span = document.createElement('span');
-          console.log("LAYER", layer);
-          span.textContent = `${layer.name} (z${layer.zoomMin}–${layer.zoomMax})`;
+          span.textContent = `${layer.name}`;
 
           label.appendChild(input);
           label.appendChild(span);
@@ -132,10 +124,4 @@ export function createLayersButtonControl(opts: {
   });
 
   return new Control({ position });
-}
-
-function isLayerEnabled(layer: DynamicLayer, zoom: number) {
-  if (layer.zoomMin != undefined && zoom < layer.zoomMin) return false;
-  if (layer.zoomMax != undefined && zoom > layer.zoomMax) return false;
-  return true;
 }

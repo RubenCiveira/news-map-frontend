@@ -25,22 +25,26 @@ export class GeoService {
     const res = await this.tables.listRows({
       databaseId: this.databaseId,
       tableId: this.layersTable,
+      queries: [Query.limit(200)]
     });
     return res.rows;
   }
 
-  getRegionsInViewport(bbox: L.LatLngBounds, layerId: string, progressive?: boolean): Observable<any[]> {
+  getRegionsInViewport(bbox: L.LatLngBounds, layerId: any, progressive?: boolean): Observable<any[]> {
     return new Observable((subscriber) => {
       let cancelled = false;
       let cursor: string | null = null;
       const all: any[] = [];
-
       const filter = [
-        Query.equal('layerId', layerId),
-        Query.greaterThanEqual('maxLng', Math.floor( bbox.getWest() ) -1 ),
-        Query.lessThanEqual('minLng', Math.ceil( bbox.getEast() ) + 1),
-        Query.greaterThanEqual('maxLat', Math.floor( bbox.getSouth() ) - 1),
-        Query.lessThanEqual('minLat', Math.ceil( bbox.getNorth() ) + 1),
+        Query.equal('layerId', [...layerId]),
+        // Query.greaterThanEqual('maxLng', Math.floor( bbox.getWest() ) -1 ),
+        // Query.lessThanEqual('minLng', Math.ceil( bbox.getEast() ) + 1),
+        // Query.greaterThanEqual('maxLat', Math.floor( bbox.getSouth() ) - 1),
+        // Query.lessThanEqual('minLat', Math.ceil( bbox.getNorth() ) + 1),
+        Query.greaterThanEqual('maxLng', bbox.getWest() ),
+        Query.lessThanEqual('minLng',  bbox.getEast() ),
+        Query.greaterThanEqual('maxLat', bbox.getSouth() ),
+        Query.lessThanEqual('minLat',  bbox.getNorth() ),
       ];
 
       const load = async () => {
