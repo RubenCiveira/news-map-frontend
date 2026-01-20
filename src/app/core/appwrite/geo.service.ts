@@ -242,6 +242,7 @@ export class GeoService {
     if (!polygons || polygons.length === 0) return null;
     if (polygons.length === 1) {
       return {
+        id: region.$id,
         title: region.title,
         color: region.color,
         geojson: {
@@ -252,6 +253,7 @@ export class GeoService {
     }
 
     return {
+      id: region.$id,
       title: region.title,
       color: region.color,
       geojson: {

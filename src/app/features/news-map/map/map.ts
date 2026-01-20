@@ -1,5 +1,9 @@
 import { Component, AfterViewInit, OnDestroy } from '@angular/core';
 import * as L from 'leaflet';
+import booleanPointInPolygon from '@turf/boolean-point-in-polygon';
+import { point } from '@turf/helpers';
+
+import 'leaflet.markercluster';
 import { GeoService } from '../../../core/appwrite/geo.service';
 import {
   catchError,
@@ -14,13 +18,22 @@ import {
 } from 'rxjs';
 import { createLayersButtonControl } from './layers-button.control';
 
+type PickablePolygon = {
+  id: string;
+  title: string;
+  layerId?: string;
+  feature: GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>;
+  leafletLayer: L.Layer; // para resaltar luego
+};
+
 class ViewPort {
-  constructor(public readonly bounds: L.LatLngBounds, public readonly layers: Set<string>) {}
+  constructor(
+    public readonly bounds: L.LatLngBounds,
+    public readonly layers: Set<string>,
+  ) {}
 
   equals(view: ViewPort) {
-    const eq = this.bounds.equals(view.bounds) && this.setEquals(this.layers, view.layers);
-    console.log('EQUALS ', eq);
-    return eq;
+    return this.bounds.equals(view.bounds) && this.setEquals(this.layers, view.layers);
   }
 
   setEquals(a: Set<string>, b: Set<string>): boolean {
@@ -45,12 +58,13 @@ export class MapComponent implements AfterViewInit, OnDestroy {
   private readonly DEFAULT_CENTER: L.LatLngExpression = [40.4168, -3.7038]; // Madrid
   private readonly DEFAULT_ZOOM = 6;
 
+  private pickables: PickablePolygon[] = [];
+
   private allLayers: any = {};
   private regionsLayer?: L.LayerGroup<any>;
 
-  private selectedLayerIds = new Set<string>();
-
   private viewport$ = new Subject<ViewPort>();
+  private selectedLayerIds = new Set<string>();
 
   constructor(private geo: GeoService) {}
 
@@ -78,29 +92,46 @@ export class MapComponent implements AfterViewInit, OnDestroy {
             }
           });
           const previous = !!this.regionsLayer;
-          if( allLayersToView.size > 0 ) {
-            const call = this.geo.getRegionsInViewport(bbox.bounds, allLayersToView, !previous).pipe(
-              catchError((err) => EMPTY),
-              tap((regions) => {
-                if (this.regionsLayer) {
-                  this.regionsLayer.remove();
-                }
-                this.regionsLayer = L.layerGroup();
-                this.regionsLayer.addTo(this.map);
-                this.renderRegions(regions, this.regionsLayer);
-              })
-            );
+          if (allLayersToView.size > 0) {
+            const call = this.geo
+              .getRegionsInViewport(bbox.bounds, allLayersToView, !previous)
+              .pipe(
+                catchError((err) => EMPTY),
+                tap((regions) => {
+                  if (this.regionsLayer) {
+                    this.regionsLayer.remove();
+                  }
+                  this.regionsLayer = L.layerGroup();
+                  this.regionsLayer.addTo(this.map);
+                  this.pickables = [];
+                  this.renderRegions(regions, this.regionsLayer);
+                }),
+              );
             values.push(call);
           } else if (this.regionsLayer) {
-              this.regionsLayer.remove();
+            this.regionsLayer.remove();
           }
           return merge(...values);
-        })
+        }),
       )
       .subscribe();
     this.reloadRegions();
     this.map.on('moveend zoomend', () => {
       this.reloadRegions();
+    });
+    this.map.on('click', (e) => {
+      const p = point([e.latlng.lng, e.latlng.lat]);
+      console.log("ON", p);
+      const hits = this.pickables.filter((item) => booleanPointInPolygon(p, item.feature as any));
+
+      if (hits.length === 0) return;
+
+      if (hits.length === 1) {
+        this.openPolygonDetail(hits[0], e.latlng);
+        return;
+      }
+
+      this.openPickListPopup(hits, e.latlng);
     });
     const layers = await this.geo.getLayers();
     layers.forEach((layer) => {
@@ -139,7 +170,7 @@ export class MapComponent implements AfterViewInit, OnDestroy {
           enableHighAccuracy: true,
           timeout: 5000,
           maximumAge: 60_000,
-        }
+        },
       );
     } else {
       this.map.setView(this.DEFAULT_CENTER, this.DEFAULT_ZOOM, { animate: false });
@@ -178,9 +209,13 @@ export class MapComponent implements AfterViewInit, OnDestroy {
               fillOpacity: 0.2,
               weight: 1,
             },
-          })
-            .addTo(layer)
-            .bindPopup(region.title);
+          }).addTo(layer);
+          this.pickables.push({
+            id: region.id,
+            title: region.title,
+            feature: region.geojson,
+            leafletLayer: layer,
+          });
         } catch (fail) {
           console.error('FAIL FOR ' + region.title);
         }
@@ -195,4 +230,64 @@ export class MapComponent implements AfterViewInit, OnDestroy {
     if (layer.zoomMax != undefined && zoom > layer.zoomMax) return false;
     return true;
   }
+
+  private openPickListPopup(hits: PickablePolygon[], latlng: L.LatLng) {
+    const html = `
+    <div style="max-height:220px; overflow:auto; min-width:220px">
+      <div style="font-weight:600; margin-bottom:8px">
+        ${hits.length} elementos aquí
+      </div>
+      ${hits
+        .map(
+          (h) => `
+        <button data-id="${h.id}"
+          style="display:block;width:100%;text-align:left;padding:6px 8px;margin:4px 0;cursor:pointer">
+          ${escapeHtml(h.title)}
+        </button>
+      `,
+        )
+        .join('')}
+    </div>
+  `;
+
+    const popup = L.popup().setLatLng(latlng).setContent(html).openOn(this.map);
+
+    // Hook: capturar clicks en los botones del popup
+    setTimeout(() => {
+      const container = popup.getElement();
+      if (!container) return;
+
+      container.querySelectorAll('button[data-id]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const id = (btn as HTMLButtonElement).dataset['id'];
+          const sel = hits.find((x) => x.id === id);
+          if (sel) this.openPolygonDetail(sel, latlng);
+        });
+      });
+    }, 0);
+  }
+
+  private openPolygonDetail(item: PickablePolygon, latlng: L.LatLng) {
+    // resaltar
+    (item.leafletLayer as any).setStyle?.({ weight: 4, fillOpacity: 0.35 });
+
+    L.popup()
+      .setLatLng(latlng)
+      .setContent(`<b>${escapeHtml(item.title)}</b><br/>ID: ${item.id}`)
+      .openOn(this.map);
+  }
+}
+
+function escapeHtml(s: string) {
+  return s.replace(
+    /[&<>"']/g,
+    (c) =>
+      ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;',
+      })[c] as string,
+  );
 }
