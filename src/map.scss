@@ -47,3 +47,34 @@
   padding: 4px 0;
   cursor: pointer;
 }
+
+.tree-folder {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  font-weight: 600;
+}
+
+.tree-folder-btn {
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.tree-folder-title {
+  user-select: none;
+}
+
+.tree-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  cursor: pointer;
+  user-select: none;
+}

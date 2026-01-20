@@ -153,9 +153,10 @@ export class MapComponent implements AfterViewInit, OnDestroy {
         { id: 'sat', name: 'Satélite', type: 'base', layer: satellite },
       ],
       overlays: [], // si quieres capas Leaflet locales
-      dynamicLayersProvider: async () => {
-        const layers = await this.geo.getLayerGroups();
-        return layers.map((l: any) => l);
+      dynamicTreeProvider: async () => {
+        return this.geo.getCatalogTree();
+        // const layers = await this.geo.getLayerGroups();
+        // return layers.map((l: any) => l);
       },
       onDynamicChange: (ids) => {
         console.log('Use ', ids);
