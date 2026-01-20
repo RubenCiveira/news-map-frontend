@@ -145,7 +145,7 @@ export class GeoService {
     );
 
     return combineLatest([points$, regions$]).pipe(
-      map(([points, regions]) => ([...points, ...regions ])),
+      map(([points, regions]) => [...points, ...regions]),
     );
   }
 
@@ -178,12 +178,17 @@ export class GeoService {
           });
           if (cancelled) return;
           const values = res.rows.map((region: any) => {
+            let metadata;
+            try {
+              metadata = region.metadata ? JSON.parse( region.metadata ) : {};
+            } catch(erro) {
+              metadata = {};
+            }
             return {
+              ...region,
               id: region.$id,
-              title: region.title,
-              color: region.color,
+              metadata: metadata,
               kind: 'point',
-              icon: region.icon,
               geojson: {
                 type: 'Point',
                 coordinates: region.geometry,
@@ -265,63 +270,33 @@ export class GeoService {
   }
 
   private appwritePolygonsToGeoJSON(region: any, polygons: any[]) {
-    const template = `
-# {{title}}
-
-| Campo | Valor |
-|------|-------|
-| País | {{country}} |
-| Tipo | {{type}} |
-| Altitud | {{altitude}} ft |
-
-{{#metadata.frequency}}
-**Frecuencia:** \`{{metadata.frequency}}\`
-{{/metadata.frequency}}
-
-{{#metadata.links}}
-## Enlaces
-{{#metadata.links}}
-- [{{label}}]({{url}})
-{{/metadata.links}}
-{{/metadata.links}}    
-    `;
-    const meta = {
-      title: 'Como mola',
-      type: 'el tipo',
-      country: 'pt',
-      altitude: 'alt',
-      links: [
-        {label: 'uu', url: 'http://google.es'},
-        {label: 'dd', url: 'http://google.es'},
-      ]
-    }
     if (!polygons || polygons.length === 0) return null;
-    if (polygons.length === 1) {
-      return {
-        id: region.$id,
-        title: region.title,
-        color: region.color,
-        kind: 'region',
-        popupTemplate: template,
-        metadata: meta,
-        geojson: {
-          type: 'Polygon',
-          coordinates: region.geometry,
-        } as any,
-      };
+    let metadata;
+    try {
+      metadata = region.metadata ? JSON.parse( region.metadata ) : {};
+    } catch(erro) {
+      metadata = {};
     }
-
-    return {
-      id: region.$id,
-      title: region.title,
-      color: region.color,
-      kind: 'region',
-      popupTemplate: template,
-      metadata: meta,
-      geojson: {
-        type: 'MultiPolygon',
-        coordinates: (region.geometry as any[]).map((polygon) => [polygon]),
-      },
-    };
+    return polygons.length === 1
+      ? {
+          ...region,
+          id: region.$id,
+          metadata: metadata,
+          kind: 'region',
+          geojson: {
+            type: 'Polygon',
+            coordinates: region.geometry,
+          } as any,
+        }
+      : {
+          ...region,
+          id: region.$id,
+          metadata: metadata,
+          kind: 'region',
+          geojson: {
+            type: 'MultiPolygon',
+            coordinates: (region.geometry as any[]).map((polygon) => [polygon]),
+          },
+        };
   }
 }

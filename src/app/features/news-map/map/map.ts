@@ -16,6 +16,9 @@ import {
 } from 'rxjs';
 import { createLayersButtonControl } from './layers-button.control';
 import { TemplateService } from './template.service';
+import { MatBottomSheet } from '@angular/material/bottom-sheet';
+import { inject } from '@angular/core';
+import { DetailSheetComponent } from './detail-sheet.component';
 
 type BBox = { minLng: number; minLat: number; maxLng: number; maxLat: number };
 
@@ -24,7 +27,7 @@ type PickablePoint = {
   title: string;
   lat: number;
   lng: number;
-  content: any,
+  content: any;
   leafletLayer: L.Layer; // para resaltar luego
 };
 
@@ -34,7 +37,7 @@ type PickablePolygon = {
   layerId?: string;
   feature: GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>;
   bbox?: BBox; // si lo tienes (ideal)
-  content: any,
+  content: any;
   leafletLayer: L.Layer; // para resaltar luego
 };
 
@@ -79,6 +82,10 @@ class RegionStore {
   public getPoligon(id: string): L.Layer | undefined {
     return this.polygonById.get(id);
   }
+  
+  public elements(): (PickablePoint | PickablePolygon)[] {
+    return [...this.pickables.values(), ...this.pickablesPoints.values()];
+  }
 
   public near(p: L.LatLng): (PickablePoint | PickablePolygon)[] {
     const radiusMeters = metersFromPixels(this.map, 18, p);
@@ -88,7 +95,7 @@ class RegionStore {
     return [...nearbyPoints, ...nearbyPolygons];
   }
 
-  public addPoint(region: any, element: L.GeoJSON) {
+  public addPoint(region: any, layer: any, element: L.GeoJSON) {
     this.polygonById.set(region.id, element);
     if (!this.clusterLayer) {
       this.clusterLayer = L.layerGroup();
@@ -100,12 +107,15 @@ class RegionStore {
       title: region.title,
       lat: region.geojson.coordinates[1],
       lng: region.geojson.coordinates[0],
-      content: region,
+        content: { ...region,
+          smallTemplate: layer?.smallTemplate,
+          bigTemplate: layer?.bigTemplate
+        },
       leafletLayer: element,
     });
   }
 
-  public addPoligon(region: any, element: L.GeoJSON) {
+  public addPoligon(region: any, layer: any, element: L.GeoJSON) {
     if (!this.regionsLayer) {
       this.regionsLayer = L.layerGroup();
       this.regionsLayer.addTo(this.map);
@@ -119,7 +129,10 @@ class RegionStore {
         title: region.title,
         lat: region.geojson.coordinates[1],
         lng: region.geojson.coordinates[0],
-        content: region,
+        content: { ...region,
+          smallTemplate: layer?.smallTemplate,
+          bigTemplate: layer?.bigTemplate
+        },
         leafletLayer: element,
       });
     } else {
@@ -127,7 +140,10 @@ class RegionStore {
         id: region.id,
         title: region.title,
         feature: region.geojson,
-        content: region,
+        content: { ...region,
+          smallTemplate: layer?.smallTemplate,
+          bigTemplate: layer?.bigTemplate
+        },
         leafletLayer: element,
       });
     }
@@ -147,6 +163,8 @@ export class MapComponent implements AfterViewInit, OnDestroy {
   private readonly ICON_SIZE = 24;
   private readonly DEFAULT_ZOOM = 6;
   private readonly DEFAULT_CENTER: L.LatLngExpression = [40.4168, -3.7038]; // Madrid
+
+  private bottomSheet = inject(MatBottomSheet);
 
   private map!: L.Map;
   private store!: RegionStore;
@@ -195,6 +213,8 @@ export class MapComponent implements AfterViewInit, OnDestroy {
                 }),
               );
             values.push(call);
+          } else {
+            this.renderRegions([]);
           }
           return merge(...values);
         }),
@@ -275,24 +295,42 @@ export class MapComponent implements AfterViewInit, OnDestroy {
     control.addTo(this.map);
   }
 
+  private getLayer(id: string) {
+    let result = undefined;
+    Object.values( this.allLayers ).forEach( (value:any) => {
+        value.forEach( (layer:any) => {
+          if( layer.$id === id ) {
+            result = layer;
+          }
+        })
+    });
+    return result;
+  }
+
   private renderRegions(regions: any[]) {
     // const currents = regions.map((r) => r.id);
     // for (const [id, layer] of this.store.poligons()) {
     //   if (!currents.includes(id)) {
     //     // console.log('delete');
     //   }
-    // }
+    //}
+    for( const el of this.store.elements() ) {
+      if( !this.selectedLayerIds.has( el.content.layerId) ) {
+        el.leafletLayer.remove();
+      }
+    }
     for (const region of regions) {
       if (region) {
         try {
+          const mapLayer = this.getLayer(region.layerId);
           if (region.kind == 'point') {
             // diámetro aproximado en px (o radio, según tu implementación)
             const iconElement = this.svgIcon(region);
             if (iconElement) {
-              this.store.addPoligon(region, iconElement);
+              this.store.addPoligon(region, mapLayer, iconElement);
             } else {
               this.store.addPoint(
-                region,
+                region,mapLayer,
                 L.geoJSON(region.geojson, {
                   style: {
                     weight: 1,
@@ -302,7 +340,7 @@ export class MapComponent implements AfterViewInit, OnDestroy {
             }
           } else {
             this.store.addPoligon(
-              region,
+              region, mapLayer,
               L.geoJSON(region.geojson, {
                 style: {
                   color: region.color,
@@ -392,21 +430,62 @@ export class MapComponent implements AfterViewInit, OnDestroy {
     const prev = { ...(item.leafletLayer as any).options?.style };
     (item.leafletLayer as any).setStyle?.({ weight: 4, fillOpacity: 0.35 });
 
-    console.log("RENDER FROM", item.content);
-    const html = this.templateRender.render({
-      template: item.content.popupTemplate,
-      mode: 'markdown',
-      data: item.content.metadata
-    });
+    const hasMore = !!item.content?.bigTemplate;
 
-    const popup = L.popup()
-      .setLatLng(latlng)
-      .setContent(`<div class="popup-md">${html}</div>`)
-      // .setContent(`<b>${escapeHtml(item.title)}</b><br/>ID: ${item.id}`)
-      .openOn(this.map);
+    let content;
+    if (item.content.smallTemplate) {
+      const html = this.templateRender.render({
+        template: item.content.smallTemplate,
+        mode: 'markdown',
+        data: item.content.metadata,
+      });
+      content = `<div class="popup-md">${html}
+              ${hasMore ? `
+          <div style="margin-top:10px; display:flex; justify-content:flex-end">
+            <button class="btn-more-detail" type="button"
+              style="border:0; background:#1976d2; color:white; padding:6px 10px; border-radius:8px; cursor:pointer">
+              Más detalle
+            </button>
+          </div>
+        ` : ``}
+        </div>`;
+    } else {
+      content = `<div>
+            <b>${escapeHtml(item.title)}</b><br/>ID: ${item.id}
+              ${hasMore ? `<div style="margin-top:10px"><button class="btn-more-detail" type="button">Más detalle</button></div>` : ``}
+              </div>`;
+    }
+
+    const popup = L.popup().setLatLng(latlng).setContent(content).openOn(this.map);
     popup.on('remove', () => {
       (item.leafletLayer as any).setStyle?.(prev);
     });
+    // enganchar botón "más detalle"
+    if (hasMore) {
+      setTimeout(() => {
+        const el = popup.getElement();
+        if (!el) return;
+
+        const btn = el.querySelector('.btn-more-detail') as HTMLButtonElement | null;
+        if (!btn) return;
+
+        btn.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+
+          const html = this.templateRender.render({
+            template: item.content.bigTemplate,
+            mode: 'markdown',
+            data: item.content.metadata,
+          });
+          popup.close();
+          this.bottomSheet.open(DetailSheetComponent, {
+            data: { html },
+            panelClass: 'detail-sheet-panel',
+          });
+        });
+      }, 0);
+    }
   }
 }
 

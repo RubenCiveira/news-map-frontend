@@ -18,13 +18,11 @@ export class TemplateService {
     }
 
     // markdown -> html
-    const html = marked.parse(raw) as string;
-    return escapeHtml(html);
+    return marked.parse(raw) as string;
   }
 }
 
 function escapeHtml(s: string) {
-  return s;
   return s.replace(
     /[&<>"']/g,
     (c) =>
