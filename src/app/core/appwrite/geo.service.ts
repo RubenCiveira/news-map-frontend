@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Databases, Query, TablesDB } from 'appwrite';
 import { appwriteClient } from './appwrite.client';
-import { Observable } from 'rxjs';
+import { combineLatest, map, Observable, startWith } from 'rxjs';
 
 export type CatalogGroupRow = {
   $id: string;
@@ -32,6 +32,7 @@ export class GeoService {
   readonly layerGroupsTable = 'layergroups';
   readonly catalogGroupsTable = 'cataloggroup';
   readonly regionsTable = 'regions';
+  readonly pointsTable = 'points';
 
   async getCatalogTree(): Promise<CatalogNode[]> {
     // 1) Primero layerGroups
@@ -107,7 +108,7 @@ export class GeoService {
     const res = await this.tables.listRows({
       databaseId: this.databaseId,
       tableId: this.catalogGroupsTable,
-      queries: [ Query.orderAsc("order") ]
+      queries: [Query.orderAsc('order')],
     });
     return res.rows;
   }
@@ -116,7 +117,7 @@ export class GeoService {
     const res = await this.tables.listRows({
       databaseId: this.databaseId,
       tableId: this.layerGroupsTable,
-      queries: [ Query.orderAsc("order") ]
+      queries: [Query.orderAsc('order')],
     });
     return res.rows;
   }
@@ -125,26 +126,44 @@ export class GeoService {
     const res = await this.tables.listRows({
       databaseId: this.databaseId,
       tableId: this.layersTable,
-      queries: [Query.limit(200)]
+      queries: [Query.limit(200)],
     });
     return res.rows;
   }
 
-  getRegionsInViewport(bbox: L.LatLngBounds, layerId: any, progressive?: boolean): Observable<any[]> {
+  getFeaturesInViewport(
+    bbox: L.LatLngBounds,
+    layerId: any,
+    progressive?: boolean,
+  ): Observable<any[]> {
+    const points$ = this.getPointsInViewport(bbox, layerId, progressive).pipe(
+      startWith([] as any[]),
+    );
+
+    const regions$ = this.getRegionsInViewport(bbox, layerId, progressive).pipe(
+      startWith([] as any[]),
+    );
+
+    return combineLatest([points$, regions$]).pipe(
+      map(([points, regions]) => ([...points, ...regions ])),
+    );
+  }
+
+  getPointsInViewport(
+    bbox: L.LatLngBounds,
+    layerId: any,
+    progressive?: boolean,
+  ): Observable<any[]> {
     return new Observable((subscriber) => {
       let cancelled = false;
       let cursor: string | null = null;
       const all: any[] = [];
       const filter = [
         Query.equal('layerId', [...layerId]),
-        // Query.greaterThanEqual('maxLng', Math.floor( bbox.getWest() ) -1 ),
-        // Query.lessThanEqual('minLng', Math.ceil( bbox.getEast() ) + 1),
-        // Query.greaterThanEqual('maxLat', Math.floor( bbox.getSouth() ) - 1),
-        // Query.lessThanEqual('minLat', Math.ceil( bbox.getNorth() ) + 1),
-        Query.greaterThanEqual('maxLng', bbox.getWest() ),
-        Query.lessThanEqual('minLng',  bbox.getEast() ),
-        Query.greaterThanEqual('maxLat', bbox.getSouth() ),
-        Query.lessThanEqual('minLat',  bbox.getNorth() ),
+        Query.greaterThanEqual('longitude', bbox.getWest()),
+        Query.lessThanEqual('longitude', bbox.getEast()),
+        Query.greaterThanEqual('latitude', bbox.getSouth()),
+        Query.lessThanEqual('latitude', bbox.getNorth()),
       ];
 
       const load = async () => {
@@ -154,15 +173,26 @@ export class GeoService {
 
           const res = await this.tables.listRows({
             databaseId: this.databaseId,
-            tableId: this.regionsTable,
+            tableId: this.pointsTable,
             queries,
           });
           if (cancelled) return;
-          const values = res.rows.map((region) =>
-            this.appwritePolygonsToGeoJSON(region, (region as any).geometry)
-          );
+          const values = res.rows.map((region: any) => {
+            return {
+              id: region.$id,
+              title: region.title,
+              color: region.color,
+              kind: 'point',
+              icon: region.icon,
+              geojson: {
+                type: 'Point',
+                coordinates: region.geometry,
+              } as any,
+            };
+            // this.appwritePolygonsToGeoJSON(region, (region as any).geometry)
+          });
           all.push(...values);
-          if( progressive ) {
+          if (progressive) {
             subscriber.next(all);
           }
           if (res.rows.length < 100) break;
@@ -182,60 +212,56 @@ export class GeoService {
     });
   }
 
-  async oldGetRegionsInViewport(bbox: L.LatLngBounds) {
-    let all: any[] = [];
-    let cursor: string | null = null;
-    let filter = [
-      Query.greaterThanEqual('maxLng', bbox.getWest()),
-      Query.lessThanEqual('minLng', bbox.getEast()),
-      Query.greaterThanEqual('maxLat', bbox.getSouth()),
-      Query.lessThanEqual('minLat', bbox.getNorth()),
-    ];
-    while (true) {
-      const queries = [...filter, Query.limit(100)];
-      if (cursor) {
-        queries.push(Query.cursorAfter(cursor));
-      }
-      const res = await this.tables.listRows({
-        databaseId: this.databaseId,
-        tableId: this.regionsTable,
-        queries: queries,
-      });
-      const values = res.rows.map((region) =>
-        this.appwritePolygonsToGeoJSON(region, (region as any).geometry)
-      );
-      all.push(...values);
-      if (res.rows.length < 100) {
-        break;
-      }
-      cursor = res.rows[res.rows.length - 1].$id;
-    }
-    return all;
-  }
+  getRegionsInViewport(
+    bbox: L.LatLngBounds,
+    layerId: any,
+    progressive?: boolean,
+  ): Observable<any[]> {
+    return new Observable((subscriber) => {
+      let cancelled = false;
+      let cursor: string | null = null;
+      const all: any[] = [];
+      const filter = [
+        Query.equal('layerId', [...layerId]),
+        Query.greaterThanEqual('maxLng', bbox.getWest()),
+        Query.lessThanEqual('minLng', bbox.getEast()),
+        Query.greaterThanEqual('maxLat', bbox.getSouth()),
+        Query.lessThanEqual('minLat', bbox.getNorth()),
+      ];
 
-  async getAllRegions() {
-    let all: any[] = [];
-    let cursor: string | null = null;
-    while (true) {
-      const queries = [Query.limit(100)];
-      if (cursor) {
-        queries.push(Query.cursorAfter(cursor));
-      }
-      const res = await this.tables.listRows({
-        databaseId: this.databaseId,
-        tableId: this.regionsTable,
-        queries: queries,
-      });
-      const values = res.rows.map((region) =>
-        this.appwritePolygonsToGeoJSON(region, (region as any).geometry)
-      );
-      all.push(...values);
-      if (res.rows.length < 100) {
-        break;
-      }
-      cursor = res.rows[res.rows.length - 1].$id;
-    }
-    return all;
+      const load = async () => {
+        while (!cancelled) {
+          const queries = [...filter, Query.limit(100)];
+          if (cursor) queries.push(Query.cursorAfter(cursor));
+
+          const res = await this.tables.listRows({
+            databaseId: this.databaseId,
+            tableId: this.regionsTable,
+            queries,
+          });
+          if (cancelled) return;
+          const values = res.rows.map((region) =>
+            this.appwritePolygonsToGeoJSON(region, (region as any).geometry),
+          );
+          all.push(...values);
+          if (progressive) {
+            subscriber.next(all);
+          }
+          if (res.rows.length < 100) break;
+          cursor = res.rows[res.rows.length - 1].$id;
+        }
+        if (!progressive) {
+          subscriber.next(all);
+        }
+        subscriber.complete();
+      };
+
+      load().catch((err) => subscriber.error(err));
+
+      return () => {
+        cancelled = true;
+      };
+    });
   }
 
   private appwritePolygonsToGeoJSON(region: any, polygons: any[]) {
@@ -245,6 +271,7 @@ export class GeoService {
         id: region.$id,
         title: region.title,
         color: region.color,
+        kind: 'region',
         geojson: {
           type: 'Polygon',
           coordinates: region.geometry,
@@ -256,6 +283,7 @@ export class GeoService {
       id: region.$id,
       title: region.title,
       color: region.color,
+      kind: 'region',
       geojson: {
         type: 'MultiPolygon',
         coordinates: (region.geometry as any[]).map((polygon) => [polygon]),

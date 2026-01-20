@@ -32,6 +32,9 @@ importers:
       '@angular/router':
         specifier: ^21.0.0
         version: 21.0.8(@angular/common@21.0.8(@angular/core@21.0.8(@angular/compiler@21.0.8)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.0.8(@angular/compiler@21.0.8)(rxjs@7.8.2))(@angular/platform-browser@21.0.8(@angular/common@21.0.8(@angular/core@21.0.8(@angular/compiler@21.0.8)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.0.8(@angular/compiler@21.0.8)(rxjs@7.8.2)))(rxjs@7.8.2)
+      '@turf/boolean-intersects':
+        specifier: ^7.3.2
+        version: 7.3.2
       '@turf/boolean-point-in-polygon':
         specifier: ^7.3.2
         version: 7.3.2
@@ -1640,6 +1643,12 @@ packages:
     resolution: {integrity: sha512-Y8cK9aggNRsqJVaKUlEYs4s7CvQ1b1ta2DVPyAimb0I2qhzjNk+A+mxvll/klL0RlfuIUei8BF7YWiua4kQqww==}
     engines: {node: ^20.17.0 || >=22.9.0}
 
+  '@turf/boolean-disjoint@7.3.2':
+    resolution: {integrity: sha512-8cz3fAWldktvCEmIwMvzEq0q7JnICJPZeQ/xPm+XccGbRcGHQZOFI3wZCemQh6akRowWfQ8PgQu2OeJXJbvIuA==}
+
+  '@turf/boolean-intersects@7.3.2':
+    resolution: {integrity: sha512-ucNeh2pq0nzcwSHBIfv3Sq6K/ANNf01ZtSQsR/ASzvsUi3LEG6KtTI49xVkz7n4Chl/LkWscDqqKpAq0t04xYA==}
+
   '@turf/boolean-point-in-polygon@7.3.2':
     resolution: {integrity: sha512-PAfPDQ0TW1+VLgZ7tReTSyZ/X41AW7/nMRQxVpY+h/aG7JomZJ779lojnODT4dWCn3IMTA3xD2dDDfVYBAQMYg==}
 
@@ -1648,6 +1657,15 @@ packages:
 
   '@turf/invariant@7.3.2':
     resolution: {integrity: sha512-brGmL1EFhZH/YNXhq6S+8sPWBEnmvEyxMWJO8bUNOFZyWHYiRTwxQHZM+An1blkbQ77PiEzsdNAspZqE1j7YKA==}
+
+  '@turf/line-intersect@7.3.2':
+    resolution: {integrity: sha512-qsMUml7MI/x1iLcQzCuD/LlAxQUfMDR6PoVwQ32fGF7dCqfdMkKWoMz4Qn5WyPCeSyW8BchuAjWp5FnVtOeLeg==}
+
+  '@turf/meta@7.3.2':
+    resolution: {integrity: sha512-FIcIY+ZsAe9QV4fHciTXeuRz2TKIVaEjivkl4vMFCibdj7FUkWDofqOncbIre1xPrgktQeh20ZrmD+p0kf3n4Q==}
+
+  '@turf/polygon-to-line@7.3.2':
+    resolution: {integrity: sha512-/C8On+ddnMi1z2r5ZLbGyXb+gCM4d4CpAKx3f80kyReM2IxwN6F0t6y1PPXYx4eR2P49fhiEcQJ9m0kCwQBAzw==}
 
   '@tybys/wasm-util@0.10.1':
     resolution: {integrity: sha512-9tTaPJLSiejZKx+Bmog4uSubteqTvFrVrURwkmHixBo0G4seD0zUxp98E1DzUBJxLQ3NPwXrGKDiVjwx/DpPsg==}
@@ -2806,6 +2824,9 @@ packages:
     resolution: {integrity: sha512-ot0WnXS9fgdkgIcePe6RHNk1WA8+muPa6cSjeR3V8K27q9BB1rTE3R1p7Hv0z1ZyAc8s6Vvv8DIyWf681MAt0w==}
     engines: {node: '>= 0.4'}
 
+  sweepline-intersections@1.5.0:
+    resolution: {integrity: sha512-AoVmx72QHpKtItPu72TzFL+kcYjd67BPLDoR0LarIk+xyaRg+pDTMFXndIEvZf9xEKnJv6JdhgRMnocoG0D3AQ==}
+
   symbol-tree@3.2.4:
     resolution: {integrity: sha512-9QNk5KwDF+Bvz+PyObkmSYjI5ksVUYtjW7AU22r2NKcfLJcXp96hkDWU3+XndOsUb+AQ9QhfzfCT2O+CNWT5Tw==}
 
@@ -2823,6 +2844,9 @@ packages:
   tinyglobby@0.2.15:
     resolution: {integrity: sha512-j2Zq4NyQYG5XMST4cbs02Ak8iJUdxRM0XI5QyxXuZOzKOINmWurp3smXu3y5wDcJrptwpSjgXHzIQxR0omXljQ==}
     engines: {node: '>=12.0.0'}
+
+  tinyqueue@2.0.3:
+    resolution: {integrity: sha512-ppJZNDuKGgxzkHihX8v9v9G5f+18gzaTfrukGrq6ueg0lmH4nqVnA2IPG0AEH3jKEk2GRJCUhDoqpoiw3PHLBA==}
 
   tinyrainbow@3.0.3:
     resolution: {integrity: sha512-PSkbLUoxOFRzJYjjxHJt9xro7D+iilgMX/C9lawzVuYiIdcihh9DXmVibBe8lmcFrRi/VzlPjBxbN7rH24q8/Q==}
@@ -4377,6 +4401,24 @@ snapshots:
       '@tufjs/canonical-json': 2.0.0
       minimatch: 10.1.1
 
+  '@turf/boolean-disjoint@7.3.2':
+    dependencies:
+      '@turf/boolean-point-in-polygon': 7.3.2
+      '@turf/helpers': 7.3.2
+      '@turf/line-intersect': 7.3.2
+      '@turf/meta': 7.3.2
+      '@turf/polygon-to-line': 7.3.2
+      '@types/geojson': 7946.0.16
+      tslib: 2.8.1
+
+  '@turf/boolean-intersects@7.3.2':
+    dependencies:
+      '@turf/boolean-disjoint': 7.3.2
+      '@turf/helpers': 7.3.2
+      '@turf/meta': 7.3.2
+      '@types/geojson': 7946.0.16
+      tslib: 2.8.1
+
   '@turf/boolean-point-in-polygon@7.3.2':
     dependencies:
       '@turf/helpers': 7.3.2
@@ -4393,6 +4435,26 @@ snapshots:
   '@turf/invariant@7.3.2':
     dependencies:
       '@turf/helpers': 7.3.2
+      '@types/geojson': 7946.0.16
+      tslib: 2.8.1
+
+  '@turf/line-intersect@7.3.2':
+    dependencies:
+      '@turf/helpers': 7.3.2
+      '@types/geojson': 7946.0.16
+      sweepline-intersections: 1.5.0
+      tslib: 2.8.1
+
+  '@turf/meta@7.3.2':
+    dependencies:
+      '@turf/helpers': 7.3.2
+      '@types/geojson': 7946.0.16
+      tslib: 2.8.1
+
+  '@turf/polygon-to-line@7.3.2':
+    dependencies:
+      '@turf/helpers': 7.3.2
+      '@turf/invariant': 7.3.2
       '@types/geojson': 7946.0.16
       tslib: 2.8.1
 
@@ -5767,6 +5829,10 @@ snapshots:
 
   supports-preserve-symlinks-flag@1.0.0: {}
 
+  sweepline-intersections@1.5.0:
+    dependencies:
+      tinyqueue: 2.0.3
+
   symbol-tree@3.2.4: {}
 
   tar@7.5.2:
@@ -5785,6 +5851,8 @@ snapshots:
     dependencies:
       fdir: 6.5.0(picomatch@4.0.3)
       picomatch: 4.0.3
+
+  tinyqueue@2.0.3: {}
 
   tinyrainbow@3.0.3: {}
 
