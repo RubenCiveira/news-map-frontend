@@ -15,6 +15,7 @@ import {
   tap,
 } from 'rxjs';
 import { createLayersButtonControl } from './layers-button.control';
+import { TemplateService } from './template.service';
 
 type BBox = { minLng: number; minLat: number; maxLng: number; maxLat: number };
 
@@ -23,6 +24,7 @@ type PickablePoint = {
   title: string;
   lat: number;
   lng: number;
+  content: any,
   leafletLayer: L.Layer; // para resaltar luego
 };
 
@@ -32,6 +34,7 @@ type PickablePolygon = {
   layerId?: string;
   feature: GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>;
   bbox?: BBox; // si lo tienes (ideal)
+  content: any,
   leafletLayer: L.Layer; // para resaltar luego
 };
 
@@ -97,6 +100,7 @@ class RegionStore {
       title: region.title,
       lat: region.geojson.coordinates[1],
       lng: region.geojson.coordinates[0],
+      content: region,
       leafletLayer: element,
     });
   }
@@ -115,6 +119,7 @@ class RegionStore {
         title: region.title,
         lat: region.geojson.coordinates[1],
         lng: region.geojson.coordinates[0],
+        content: region,
         leafletLayer: element,
       });
     } else {
@@ -122,6 +127,7 @@ class RegionStore {
         id: region.id,
         title: region.title,
         feature: region.geojson,
+        content: region,
         leafletLayer: element,
       });
     }
@@ -146,6 +152,8 @@ export class MapComponent implements AfterViewInit, OnDestroy {
   private store!: RegionStore;
 
   private allLayers: any = {};
+
+  private templateRender = new TemplateService();
 
   private viewport$ = new Subject<ViewPort>();
   private selectedLayerIds = new Set<string>();
@@ -384,9 +392,17 @@ export class MapComponent implements AfterViewInit, OnDestroy {
     const prev = { ...(item.leafletLayer as any).options?.style };
     (item.leafletLayer as any).setStyle?.({ weight: 4, fillOpacity: 0.35 });
 
+    console.log("RENDER FROM", item.content);
+    const html = this.templateRender.render({
+      template: item.content.popupTemplate,
+      mode: 'markdown',
+      data: item.content.metadata
+    });
+
     const popup = L.popup()
       .setLatLng(latlng)
-      .setContent(`<b>${escapeHtml(item.title)}</b><br/>ID: ${item.id}`)
+      .setContent(`<div class="popup-md">${html}</div>`)
+      // .setContent(`<b>${escapeHtml(item.title)}</b><br/>ID: ${item.id}`)
       .openOn(this.map);
     popup.on('remove', () => {
       (item.leafletLayer as any).setStyle?.(prev);

@@ -265,6 +265,36 @@ export class GeoService {
   }
 
   private appwritePolygonsToGeoJSON(region: any, polygons: any[]) {
+    const template = `
+# {{title}}
+
+| Campo | Valor |
+|------|-------|
+| País | {{country}} |
+| Tipo | {{type}} |
+| Altitud | {{altitude}} ft |
+
+{{#metadata.frequency}}
+**Frecuencia:** \`{{metadata.frequency}}\`
+{{/metadata.frequency}}
+
+{{#metadata.links}}
+## Enlaces
+{{#metadata.links}}
+- [{{label}}]({{url}})
+{{/metadata.links}}
+{{/metadata.links}}    
+    `;
+    const meta = {
+      title: 'Como mola',
+      type: 'el tipo',
+      country: 'pt',
+      altitude: 'alt',
+      links: [
+        {label: 'uu', url: 'http://google.es'},
+        {label: 'dd', url: 'http://google.es'},
+      ]
+    }
     if (!polygons || polygons.length === 0) return null;
     if (polygons.length === 1) {
       return {
@@ -272,6 +302,8 @@ export class GeoService {
         title: region.title,
         color: region.color,
         kind: 'region',
+        popupTemplate: template,
+        metadata: meta,
         geojson: {
           type: 'Polygon',
           coordinates: region.geometry,
@@ -284,6 +316,8 @@ export class GeoService {
       title: region.title,
       color: region.color,
       kind: 'region',
+      popupTemplate: template,
+      metadata: meta,
       geojson: {
         type: 'MultiPolygon',
         coordinates: (region.geometry as any[]).map((polygon) => [polygon]),
