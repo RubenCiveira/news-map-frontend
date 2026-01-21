@@ -1,7 +1,8 @@
 import { Injectable } from '@angular/core';
 import { Databases, Query, TablesDB } from 'appwrite';
-import { appwriteClient } from './appwrite.client';
-import { combineLatest, map, Observable, startWith } from 'rxjs';
+import { appwriteClient } from './appwrite/appwrite.client';
+import { combineLatest, map, Observable, of, startWith } from 'rxjs';
+import { TimeFilter } from './time-filter.service';
 
 export type CatalogGroupRow = {
   $id: string;
@@ -33,6 +34,7 @@ export class GeoService {
   readonly catalogGroupsTable = 'cataloggroup';
   readonly regionsTable = 'regions';
   readonly pointsTable = 'points';
+  readonly eventsTable = 'geoevents';
 
   async getCatalogTree(): Promise<CatalogNode[]> {
     // 1) Primero layerGroups
@@ -131,11 +133,79 @@ export class GeoService {
     return res.rows;
   }
 
-  getFeaturesInViewport(
+  getEventsInViewportDuringTime(
     bbox: L.LatLngBounds,
-    layerId: any,
+    time: TimeFilter,
+    layerId: string[],
     progressive?: boolean,
   ): Observable<any[]> {
+    if( !layerId || !layerId.length ) {
+      return of([]);
+    }
+    return new Observable((subscriber) => {
+      let cancelled = false;
+      let cursor: string | null = null;
+      const all: any[] = [];
+      const filter = [
+        Query.equal('layerId', [...layerId]),
+        Query.greaterThanEqual("eventAt", time.from.toISOString()),
+        Query.lessThanEqual("eventAt", time.to.toISOString() ),
+
+        Query.greaterThanEqual('longitude', bbox.getWest()),
+        Query.lessThanEqual('longitude', bbox.getEast()),
+        Query.greaterThanEqual('latitude', bbox.getSouth()),
+        Query.lessThanEqual('latitude', bbox.getNorth()),
+      ];
+
+      const load = async () => {
+        while (!cancelled) {
+          const queries = [...filter, Query.limit(100)];
+          if (cursor) queries.push(Query.cursorAfter(cursor));
+
+          const res = await this.tables.listRows({
+            databaseId: this.databaseId,
+            tableId: this.eventsTable,
+            queries,
+          });
+          if (cancelled) return;
+          const values = res.rows.map((region:any) => ({
+            ...region,
+            geojson: {
+                type: 'Point',
+                coordinates: region.position,
+              } as any,
+            id: region.$id
+          })
+          );
+          all.push(...values);
+          if (progressive) {
+            subscriber.next(all);
+          }
+          if (res.rows.length < 100) break;
+          cursor = res.rows[res.rows.length - 1].$id;
+        }
+        if (!progressive) {
+          subscriber.next(all);
+        }
+        subscriber.complete();
+      };
+
+      load().catch((err) => subscriber.error(err));
+
+      return () => {
+        cancelled = true;
+      };
+    });
+  }
+
+  getFeaturesInViewport(
+    bbox: L.LatLngBounds,
+    layerId: string[],
+    progressive?: boolean,
+  ): Observable<any[]> {
+    if( !layerId || !layerId.length ) {
+      return of([]);
+    }
     const points$ = this.getPointsInViewport(bbox, layerId, progressive).pipe(
       startWith([] as any[]),
     );
@@ -151,7 +221,7 @@ export class GeoService {
 
   getPointsInViewport(
     bbox: L.LatLngBounds,
-    layerId: any,
+    layerId: string[],
     progressive?: boolean,
   ): Observable<any[]> {
     return new Observable((subscriber) => {
@@ -180,8 +250,8 @@ export class GeoService {
           const values = res.rows.map((region: any) => {
             let metadata;
             try {
-              metadata = region.metadata ? JSON.parse( region.metadata ) : {};
-            } catch(erro) {
+              metadata = region.metadata ? JSON.parse(region.metadata) : {};
+            } catch (erro) {
               metadata = {};
             }
             return {
@@ -273,8 +343,8 @@ export class GeoService {
     if (!polygons || polygons.length === 0) return null;
     let metadata;
     try {
-      metadata = region.metadata ? JSON.parse( region.metadata ) : {};
-    } catch(erro) {
+      metadata = region.metadata ? JSON.parse(region.metadata) : {};
+    } catch (erro) {
       metadata = {};
     }
     return polygons.length === 1

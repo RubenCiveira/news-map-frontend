@@ -1,5 +1,5 @@
 import * as L from 'leaflet';
-import { CatalogNode } from '../../../core/appwrite/geo.service';
+import { CatalogNode } from '../../../core/geo.service';
 
 export type FixedLayer = {
   id: string;

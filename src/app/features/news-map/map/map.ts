@@ -1,15 +1,13 @@
 import { Component, AfterViewInit, OnDestroy } from '@angular/core';
 import * as L from 'leaflet';
-import booleanIntersects from '@turf/boolean-intersects';
 import 'leaflet.markercluster';
-import { GeoService } from '../../../core/appwrite/geo.service';
+import { GeoService } from '../../../core/geo.service';
 import {
-  catchError,
+  combineLatest,
   debounceTime,
   distinctUntilChanged,
-  EMPTY,
-  merge,
   Observable,
+  shareReplay,
   Subject,
   switchMap,
   tap,
@@ -19,136 +17,9 @@ import { TemplateService } from './template.service';
 import { MatBottomSheet } from '@angular/material/bottom-sheet';
 import { inject } from '@angular/core';
 import { DetailSheetComponent } from './detail-sheet.component';
-
-type BBox = { minLng: number; minLat: number; maxLng: number; maxLat: number };
-
-type PickablePoint = {
-  id: string;
-  title: string;
-  lat: number;
-  lng: number;
-  content: any;
-  leafletLayer: L.Layer; // para resaltar luego
-};
-
-type PickablePolygon = {
-  id: string;
-  title: string;
-  layerId?: string;
-  feature: GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>;
-  bbox?: BBox; // si lo tienes (ideal)
-  content: any;
-  leafletLayer: L.Layer; // para resaltar luego
-};
-
-class ViewPort {
-  constructor(
-    public readonly bounds: L.LatLngBounds,
-    public readonly layers: Set<string>,
-  ) {}
-
-  equals(view: ViewPort) {
-    return this.bounds.equals(view.bounds) && this.setEquals(this.layers, view.layers);
-  }
-
-  setEquals(a: Set<string>, b: Set<string>): boolean {
-    if (a.size !== b.size) return false;
-    for (const x of a) if (!b.has(x)) return false;
-    return true;
-  }
-}
-
-class RegionStore {
-  private clusterLayer?: any;
-  private regionsLayer?: L.LayerGroup<any>;
-  private polygonById = new Map<string, L.Layer>();
-  private pickables = new Map<string, PickablePolygon>();
-  private pickablesPoints = new Map<string, PickablePoint>();
-
-  constructor(private readonly map: L.Map) {}
-
-  public hasContent(): boolean {
-    return !!this.regionsLayer;
-  }
-
-  public poligons(): Map<string, L.Layer> {
-    return this.polygonById;
-  }
-
-  public hasPoligon(id: string): boolean {
-    return this.polygonById.has(id);
-  }
-
-  public getPoligon(id: string): L.Layer | undefined {
-    return this.polygonById.get(id);
-  }
-  
-  public elements(): (PickablePoint | PickablePolygon)[] {
-    return [...this.pickables.values(), ...this.pickablesPoints.values()];
-  }
-
-  public near(p: L.LatLng): (PickablePoint | PickablePolygon)[] {
-    const radiusMeters = metersFromPixels(this.map, 18, p);
-    const nearbyPoints = pickNearbyPoints(this.pickablesPoints, p, radiusMeters);
-    const pickBounds = bboxAroundLatLng(this.map, p, 18);
-    const nearbyPolygons = pickNearbyPolygons(this.pickables, pickBounds);
-    return [...nearbyPoints, ...nearbyPolygons];
-  }
-
-  public addPoint(region: any, layer: any, element: L.GeoJSON) {
-    this.polygonById.set(region.id, element);
-    if (!this.clusterLayer) {
-      this.clusterLayer = L.layerGroup();
-      this.clusterLayer.addTo(this.map);
-    }
-    this.clusterLayer.addLayer(element);
-    this.pickablesPoints.set(region.id, {
-      id: region.id,
-      title: region.title,
-      lat: region.geojson.coordinates[1],
-      lng: region.geojson.coordinates[0],
-        content: { ...region,
-          smallTemplate: layer?.smallTemplate,
-          bigTemplate: layer?.bigTemplate
-        },
-      leafletLayer: element,
-    });
-  }
-
-  public addPoligon(region: any, layer: any, element: L.GeoJSON) {
-    if (!this.regionsLayer) {
-      this.regionsLayer = L.layerGroup();
-      this.regionsLayer.addTo(this.map);
-    }
-    this.polygonById.get(region.id)?.remove();
-    this.polygonById.set(region.id, element);
-    this.regionsLayer.addLayer(element);
-    if (region.kind == 'point') {
-      this.pickablesPoints.set(region.id, {
-        id: region.id,
-        title: region.title,
-        lat: region.geojson.coordinates[1],
-        lng: region.geojson.coordinates[0],
-        content: { ...region,
-          smallTemplate: layer?.smallTemplate,
-          bigTemplate: layer?.bigTemplate
-        },
-        leafletLayer: element,
-      });
-    } else {
-      this.pickables.set(region.id, {
-        id: region.id,
-        title: region.title,
-        feature: region.geojson,
-        content: { ...region,
-          smallTemplate: layer?.smallTemplate,
-          bigTemplate: layer?.bigTemplate
-        },
-        leafletLayer: element,
-      });
-    }
-  }
-}
+import { PickablePoint, PickablePolygon, MapStore } from './map.store';
+import { ViewPort } from './view-port';
+import { TimeFilterService } from '../../../core/time-filter.service';
 
 const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
 const satellite = L.tileLayer('https://{s}.sat.tiles/{z}/{x}/{y}.jpg');
@@ -167,7 +38,8 @@ export class MapComponent implements AfterViewInit, OnDestroy {
   private bottomSheet = inject(MatBottomSheet);
 
   private map!: L.Map;
-  private store!: RegionStore;
+  private regionStore!: MapStore;
+  private eventStore!: MapStore;
 
   private allLayers: any = {};
 
@@ -176,63 +48,56 @@ export class MapComponent implements AfterViewInit, OnDestroy {
   private viewport$ = new Subject<ViewPort>();
   private selectedLayerIds = new Set<string>();
 
-  constructor(private geo: GeoService) {}
+  constructor(
+    private readonly geo: GeoService,
+    private readonly time: TimeFilterService,
+  ) {
+    // time.timeFilter$
+  }
 
   async ngAfterViewInit() {
     this.map = L.map('map').setView([20, 0], 2);
-    this.store = new RegionStore(this.map);
+    this.regionStore = new MapStore(this.map);
+    this.eventStore = new MapStore(this.map);
 
     osm.addTo(this.map);
     this.attachLayerSelector();
     this.tryCenterOnBrowserLocation();
 
+    combineLatest([this.viewport$, this.time.timeFilter$])
+      .pipe(
+        debounceTime(200),
+        distinctUntilChanged((a, b) => a[0].equals(b[0]) && a[1].equals(b[1])),
+        switchMap(([bbox, time]) =>
+          this.geo
+            .getEventsInViewportDuringTime(bbox.bounds, time, this.currentLayers(), false)
+            .pipe(
+              tap((reg) => {
+                console.log('IN MID', reg);
+              }),
+            ),
+        ),
+        shareReplay({ bufferSize: 1, refCount: true }),
+      )
+      .subscribe((events) => this.renderEvents(events));
+
     this.viewport$
       .pipe(
-        debounceTime(150), // evita floods
+        debounceTime(200), // evita floods
         distinctUntilChanged((a, b) => a.equals(b)),
-        switchMap((bbox) => {
-          const values: Observable<any>[] = [];
-          const allLayersToView = new Set<string>();
-          this.selectedLayerIds.forEach((groups) => {
-            if (this.allLayers[groups]) {
-              this.allLayers[groups].forEach((layerInfo: any) => {
-                if (this.isLayerEnabled(layerInfo, this.map.getZoom())) {
-                  allLayersToView.add(layerInfo.$id);
-                }
-              });
-            }
-          });
-          const previous = this.store.hasContent();
-          if (allLayersToView.size > 0) {
-            const call = this.geo
-              .getFeaturesInViewport(bbox.bounds, allLayersToView, !previous)
-              .pipe(
-                catchError((err) => EMPTY),
-                tap((regions) => {
-                  this.renderRegions(regions);
-                }),
-              );
-            values.push(call);
-          } else {
-            this.renderRegions([]);
-          }
-          return merge(...values);
-        }),
+        switchMap((bbox) =>
+          this.geo.getFeaturesInViewport(
+            bbox.bounds,
+            this.currentLayers(),
+            !this.regionStore.hasContent(),
+          ),
+        ),
+        shareReplay({ bufferSize: 1, refCount: true }),
       )
-      .subscribe();
+      .subscribe((regions) => this.renderRegions(regions));
     this.reloadRegions();
-    this.map.on('moveend zoomend', () => {
-      this.reloadRegions();
-    });
-    this.map.on('click', (e) => {
-      const picks = this.store.near(e.latlng);
-      const total = picks.length;
-      if (total === 1) {
-        this.openPolygonDetail(picks[0], e.latlng);
-      } else if (total > 0) {
-        this.openPickListPopup(picks, e.latlng);
-      }
-    });
+    this.map.on('moveend zoomend', () => this.reloadRegions());
+    this.map.on('click', (e) => this.onClick(e));
     const layers = await this.geo.getLayers();
     layers.forEach((layer) => {
       const group = (layer as any).layerGroup;
@@ -245,6 +110,31 @@ export class MapComponent implements AfterViewInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.viewport$.unsubscribe();
+  }
+
+  private onClick(e: L.LeafletMouseEvent) {
+    const picks = this.regionStore.near(e.latlng);
+    const total = picks.length;
+    if (total === 1) {
+      this.openPolygonDetail(picks[0], e.latlng);
+    } else if (total > 0) {
+      this.openPickListPopup(picks, e.latlng);
+    }
+  }
+
+  private currentLayers(): string[] {
+    const values: Observable<any>[] = [];
+    const allLayersToView = new Set<string>();
+    this.selectedLayerIds.forEach((groups) => {
+      if (this.allLayers[groups]) {
+        this.allLayers[groups].forEach((layerInfo: any) => {
+          if (this.isLayerEnabled(layerInfo, this.map.getZoom())) {
+            allLayersToView.add(layerInfo.$id);
+          }
+        });
+      }
+    });
+    return [...allLayersToView];
   }
 
   private currentView() {
@@ -297,64 +187,82 @@ export class MapComponent implements AfterViewInit, OnDestroy {
 
   private getLayer(id: string) {
     let result = undefined;
-    Object.values( this.allLayers ).forEach( (value:any) => {
-        value.forEach( (layer:any) => {
-          if( layer.$id === id ) {
-            result = layer;
-          }
-        })
+    Object.values(this.allLayers).forEach((value: any) => {
+      value.forEach((layer: any) => {
+        if (layer.$id === id) {
+          result = layer;
+        }
+      });
     });
     return result;
   }
 
+  private renderEvents(events: any[]) {
+    const currentLayers = this.currentLayers();
+    for (const el of this.eventStore.elements()) {
+      if (!currentLayers.includes(el.content.layerId)) {
+        this.eventStore.remove(el);
+      }
+    }
+    for (const event of events) {
+      const mapLayer = this.getLayer(event.layerId);
+      const angulo = event.heading ?? 0;
+      const iconoPersonalizado = L.divIcon({
+        className: '',
+        html: `
+        <img src="img/plane.png"
+             style="width:40px;height:40px; transform: rotate(${angulo}deg);">
+        `,
+        iconSize: [40, 40],
+        iconAnchor: [20, 20],
+      });
+      const mark = L.marker([event.latitude, event.longitude], { icon: iconoPersonalizado });
+      const pick = this.eventStore.addPoint(event, mapLayer, mark);
+      mark.on('click', (e) => this.openPolygonDetail(pick, new L.LatLng(event.latitude,event.longitude)));
+    }
+  }
+
   private renderRegions(regions: any[]) {
-    // const currents = regions.map((r) => r.id);
-    // for (const [id, layer] of this.store.poligons()) {
-    //   if (!currents.includes(id)) {
-    //     // console.log('delete');
-    //   }
-    //}
-    for( const el of this.store.elements() ) {
-      if( !this.selectedLayerIds.has( el.content.layerId) ) {
-        el.leafletLayer.remove();
+    const currentLayers = this.currentLayers();
+    for (const el of this.regionStore.elements()) {
+      if (!currentLayers.includes(el.content.layerId)) {
+        this.regionStore.remove(el);
       }
     }
     for (const region of regions) {
-      if (region) {
-        try {
-          const mapLayer = this.getLayer(region.layerId);
-          if (region.kind == 'point') {
-            // diámetro aproximado en px (o radio, según tu implementación)
-            const iconElement = this.svgIcon(region);
-            if (iconElement) {
-              this.store.addPoligon(region, mapLayer, iconElement);
-            } else {
-              this.store.addPoint(
-                region,mapLayer,
-                L.geoJSON(region.geojson, {
-                  style: {
-                    weight: 1,
-                  },
-                }),
-              );
-            }
+      try {
+        const mapLayer = this.getLayer(region.layerId);
+        if (region.kind == 'point') {
+          // diámetro aproximado en px (o radio, según tu implementación)
+          const iconElement = this.svgIcon(region);
+          if (iconElement) {
+            this.regionStore.addPoligon(region, mapLayer, iconElement);
           } else {
-            this.store.addPoligon(
-              region, mapLayer,
+            this.regionStore.addPointToCluster(
+              region,
+              mapLayer,
               L.geoJSON(region.geojson, {
                 style: {
-                  color: region.color,
-                  fillOpacity: 0.2,
                   weight: 1,
                 },
               }),
             );
           }
-        } catch (fail) {
-          console.error('FAIL FOR ' + region.title);
+        } else {
+          this.regionStore.addPoligon(
+            region,
+            mapLayer,
+            L.geoJSON(region.geojson, {
+              style: {
+                color: region.color,
+                fillOpacity: 0.2,
+                weight: 1,
+              },
+            }),
+          );
         }
-      } else {
-        console.log('SKIP');
+      } catch (fail) {
+        console.error('FAIL FOR ' + region.title);
       }
     }
   }
@@ -440,14 +348,18 @@ export class MapComponent implements AfterViewInit, OnDestroy {
         data: item.content.metadata,
       });
       content = `<div class="popup-md">${html}
-              ${hasMore ? `
+              ${
+                hasMore
+                  ? `
           <div style="margin-top:10px; display:flex; justify-content:flex-end">
             <button class="btn-more-detail" type="button"
               style="border:0; background:#1976d2; color:white; padding:6px 10px; border-radius:8px; cursor:pointer">
               Más detalle
             </button>
           </div>
-        ` : ``}
+        `
+                  : ``
+              }
         </div>`;
     } else {
       content = `<div>
@@ -510,110 +422,6 @@ function metersFromPixels(map: L.Map, px: number, at: L.LatLng): number {
   return at.distanceTo(latlng2); // metros
 }
 
-function bboxAroundLatLng(map: L.Map, at: L.LatLng, radiusPx: number): L.LatLngBounds {
-  const p = map.latLngToContainerPoint(at);
-  const p1 = L.point(p.x - radiusPx, p.y - radiusPx);
-  const p2 = L.point(p.x + radiusPx, p.y + radiusPx);
-
-  const ll1 = map.containerPointToLatLng(p1);
-  const ll2 = map.containerPointToLatLng(p2);
-
-  return L.latLngBounds(ll1, ll2);
-}
-
-function pickNearbyPoints(
-  points: Map<string, PickablePoint>,
-  center: L.LatLng,
-  radiusMeters: number,
-) {
-  return Array.from(points.values())
-    .map((p) => {
-      const d = center.distanceTo(L.latLng(p.lat, p.lng));
-      return { ...p, distance: d };
-    })
-    .filter((p) => p.distance <= radiusMeters)
-    .sort((a, b) => a.distance - b.distance);
-}
-
-function pickNearbyPolygons(
-  polygons: Map<string, PickablePolygon>,
-  pickBounds: L.LatLngBounds,
-  opts?: { maxResults?: number },
-): PickablePolygon[] {
-  const maxResults = opts?.maxResults ?? 50;
-
-  const pickBBox = boundsToBBox(pickBounds);
-  const pickPoly = bboxToPolygon(
-    pickBBox.minLng,
-    pickBBox.minLat,
-    pickBBox.maxLng,
-    pickBBox.maxLat,
-  );
-
-  const hits: { poly: PickablePolygon; score: number }[] = [];
-
-  for (const p of polygons.values()) {
-    // 1) Prefiltro rápido por bbox si existe
-    if (p.bbox && !bboxIntersects(p.bbox, pickBBox)) continue;
-
-    // 2) Precisión: intersección real con el área de pick
-    try {
-      const ok = booleanIntersects(pickPoly as any, p.feature as any);
-      if (!ok) continue;
-
-      // score para ordenar: bbox más pequeña = más “específica”
-      const score = p.bbox ? bboxAreaApprox(p.bbox) : Number.POSITIVE_INFINITY;
-      hits.push({ poly: p, score });
-    } catch {
-      // Si el GeoJSON está mal, lo ignoramos en el picking
-      continue;
-    }
-  }
-
-  hits.sort((a, b) => a.score - b.score);
-
-  return hits.slice(0, maxResults).map((x) => x.poly);
-}
-
-function boundsToBBox(b: L.LatLngBounds): BBox {
-  return {
-    minLng: b.getWest(),
-    minLat: b.getSouth(),
-    maxLng: b.getEast(),
-    maxLat: b.getNorth(),
-  };
-}
-
-function bboxIntersects(a: BBox, b: BBox): boolean {
-  return (
-    a.minLng <= b.maxLng && a.maxLng >= b.minLng && a.minLat <= b.maxLat && a.maxLat >= b.minLat
-  );
-}
-
-function bboxAreaApprox(b: BBox): number {
-  // área aproximada en "grados cuadrados" (vale para ordenar)
-  return Math.abs((b.maxLng - b.minLng) * (b.maxLat - b.minLat));
-}
-
-function bboxToPolygon(minLng: number, minLat: number, maxLng: number, maxLat: number) {
-  return {
-    type: 'Feature',
-    properties: {},
-    geometry: {
-      type: 'Polygon',
-      coordinates: [
-        [
-          [minLng, minLat],
-          [maxLng, minLat],
-          [maxLng, maxLat],
-          [minLng, maxLat],
-          [minLng, minLat], // cerrar el anillo
-        ],
-      ],
-    },
-  } as const;
-}
-
 function offsetMetersToLatLng(center: L.LatLng, dxMeters: number, dyMeters: number): L.LatLng {
   const R = 6378137; // metros
   const dLat = (dyMeters / R) * (180 / Math.PI);
@@ -666,7 +474,7 @@ function svgPointsToGeoPolygon(center: L.LatLng, points: XY[], sizeMeters: numbe
   return latlngs;
 }
 
-export function svgPathStringToPoints(svgText: string, samples = 64): XY[] {
+function svgPathStringToPoints(svgText: string, samples = 64): XY[] {
   const doc = new DOMParser().parseFromString(svgText, 'image/svg+xml');
   const path = doc.querySelector('path');
   if (!path) return [];

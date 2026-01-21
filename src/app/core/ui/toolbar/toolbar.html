@@ -2,16 +2,50 @@
   <span>🌍 News Map</span>
   <span class="spacer"></span>
 
+  <!-- Preset -->
+  <mat-form-field appearance="outline" style="width: 200px">
+    <mat-label>Tiempo</mat-label>
+
+    <mat-select [value]="timeFilter().preset" (valueChange)="time.setPreset($event)">
+      @for (p of timePresets; track p.value) {
+        <mat-option [value]="p.value">{{ p.label }}</mat-option>
+      }
+    </mat-select>
+  </mat-form-field>
+
+  <!-- Date range solo si es custom -->
+  @if (isCustom()) {
+    <mat-form-field appearance="outline" style="width: 320px; margin-left: 12px">
+      <mat-label>Rango</mat-label>
+
+      <mat-date-range-input [rangePicker]="picker">
+        <input
+          matStartDate
+          placeholder="Desde"
+          [value]="customRange().start"
+          (dateChange)="time.setCustomRange($event.value, customRange().end)"
+        />
+        <input
+          matEndDate
+          placeholder="Hasta"
+          [value]="customRange().end"
+          (dateChange)="time.setCustomRange(customRange().start, $event.value)"
+        />
+      </mat-date-range-input>
+
+      <mat-datepicker-toggle matSuffix [for]="picker"></mat-datepicker-toggle>
+      <mat-date-range-picker #picker></mat-date-range-picker>
+    </mat-form-field>
+  }
+
   <button mat-icon-button>
     <mat-icon>filter_list</mat-icon>
   </button>
 
-  @if( user() ) {
-      <span>{{ user()?.name }}</span>
-      <button mat-button (click)="logout()">Salir</button>
+  @if (user()) {
+    <span>{{ user()?.name }}</span>
+    <button mat-button (click)="logout()">Salir</button>
   } @else {
-      <button mat-raised-button color="accent" (click)="openLogin()">
-        Login
-      </button>
+    <button mat-raised-button color="accent" (click)="openLogin()">Login</button>
   }
 </mat-toolbar>
