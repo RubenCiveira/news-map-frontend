@@ -2,6 +2,14 @@
 @import "leaflet.markercluster/dist/MarkerCluster.css";
 @import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 
+html, body {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden; /* evita scroll “fantasma” */
+}
+
 .leaflet-control.layers-btn {
   position: relative;
 }
