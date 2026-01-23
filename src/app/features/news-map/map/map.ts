@@ -24,6 +24,17 @@ import { TimeFilterService } from '../../../core/time-filter.service';
 const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
 const satellite = L.tileLayer('https://{s}.sat.tiles/{z}/{x}/{y}.jpg');
 
+type EventGroup = {
+  id: string;
+  renderId: string;
+  reference: string;
+  title: string;
+  layerId?: string;
+  events: any[];
+  count: number;
+  path: L.LatLngExpression[];
+};
+
 @Component({
   selector: 'news-map',
   imports: [],
@@ -76,17 +87,20 @@ export class MapComponent implements AfterViewInit, OnDestroy {
         switchMap(([bbox, time]) => {
           const loadId = ++this.eventsLoadSeq;
           this.activeEventsLoadSeq = loadId;
-          let latest: any[] = [];
+          let latestGroups: EventGroup[] = [];
           return this.geo
             .getEventsInViewportDuringTime(bbox.bounds, time, this.currentLayers(), false)
             .pipe(
               tap((events) => {
-                latest = events ?? [];
-                this.mergeEvents(latest);
+                const groups = this.filterRelevantEventGroups(
+                  this.groupEventsByReference(events ?? []),
+                );
+                latestGroups = groups;
+                this.mergeEvents(groups);
               }),
               finalize(() => {
                 if (this.activeEventsLoadSeq === loadId) {
-                  this.pruneEvents(latest);
+                  this.pruneEvents(latestGroups);
                 }
               }),
             );
@@ -208,8 +222,8 @@ export class MapComponent implements AfterViewInit, OnDestroy {
     control.addTo(this.map);
   }
 
-  private getLayer(id: string) {
-    let result = undefined;
+  private getLayer(id: string): any | undefined {
+    let result: any | undefined = undefined;
     Object.values(this.allLayers).forEach((value: any) => {
       value.forEach((layer: any) => {
         if (layer.$id === id) {
@@ -220,10 +234,65 @@ export class MapComponent implements AfterViewInit, OnDestroy {
     return result;
   }
 
-  private mergeEvents(events: any[]) {
-    for (const event of events) {
-      const mapLayer = this.getLayer(event.layerId);
-      const angulo = event.heading ?? 0;
+  private mergeEvents(groups: EventGroup[]) {
+    for (const group of groups) {
+      if (group.count === 1) {
+        const event = { ...group.events[0], id: group.renderId };
+        const mapLayer = this.getLayer(event.layerId);
+        const angulo = event.heading ?? 0;
+        const iconoPersonalizado = L.divIcon({
+          className: '',
+          html: `
+        <img src="img/plane.png"
+             style="width:40px;height:40px; transform: rotate(${angulo}deg);">
+        `,
+          iconSize: [40, 40],
+          iconAnchor: [20, 20],
+        });
+        const mark = L.marker([event.latitude, event.longitude], { icon: iconoPersonalizado });
+        const pick = this.eventStore.addPoint(event, mapLayer, mark);
+        mark.on('click', () =>
+          this.openPolygonDetail(pick, new L.LatLng(event.latitude, event.longitude)),
+        );
+        continue;
+      }
+
+      if (group.path.length < 2) {
+        continue;
+      }
+
+      const mapLayer = this.getLayer(group.layerId ?? '');
+      const lineColor = (mapLayer as { color?: string } | undefined)?.color ?? '#ff6f00';
+      const polyline = L.polyline(group.path, {
+        color: lineColor,
+        weight: 2,
+        opacity: 0.8,
+      });
+      const geojson = {
+        type: 'LineString',
+        coordinates: group.path.map((pair) => {
+          const latlng = L.latLng(pair as L.LatLngExpression);
+          return [latlng.lng, latlng.lat];
+        }),
+      } as const;
+      const aggregated = {
+        id: group.renderId,
+        reference: group.reference,
+        title: group.title,
+        layerId: group.layerId,
+        kind: 'path',
+        geojson,
+        metadata: {
+          reference: group.reference,
+          count: group.count,
+        },
+      };
+      const pick = this.eventStore.addPoligon(aggregated, mapLayer, polyline);
+      const lastPoint = group.path[group.path.length - 1];
+      polyline.on('click', () => this.openPolygonDetail(pick, L.latLng(lastPoint)));
+
+      const lastEvent = group.events[group.events.length - 1];
+      const angulo = lastEvent?.heading ?? 0;
       const iconoPersonalizado = L.divIcon({
         className: '',
         html: `
@@ -233,21 +302,90 @@ export class MapComponent implements AfterViewInit, OnDestroy {
         iconSize: [40, 40],
         iconAnchor: [20, 20],
       });
-      const mark = L.marker([event.latitude, event.longitude], { icon: iconoPersonalizado });
-      const pick = this.eventStore.addPoint(event, mapLayer, mark);
-      mark.on('click', (e) => this.openPolygonDetail(pick, new L.LatLng(event.latitude,event.longitude)));
+      const marker = L.marker(lastPoint, { icon: iconoPersonalizado });
+      const markerPick = this.eventStore.addPoint(
+        { ...lastEvent, id: lastEvent?.id ?? lastEvent?.$id ?? group.id },
+        mapLayer,
+        marker,
+      );
+      marker.on('click', () => this.openPolygonDetail(markerPick, L.latLng(lastPoint)));
     }
   }
 
-  private pruneEvents(events: any[]) {
+  private pruneEvents(groups: EventGroup[]) {
     const currentLayers = new Set(this.currentLayers());
-    const ids = new Set(events.map((event) => event.id));
+    const ids = new Set<string>();
+    groups.forEach((group) => {
+      ids.add(group.renderId);
+      if (group.count > 1) {
+        const lastEvent = group.events[group.events.length - 1];
+        const lastId = lastEvent?.id ?? lastEvent?.$id;
+        if (lastId) ids.add(lastId);
+      }
+    });
     for (const el of this.eventStore.elements()) {
       const layerId = el.content?.layerId;
       if (!layerId || !currentLayers.has(layerId) || !ids.has(el.id)) {
         this.eventStore.remove(el);
       }
     }
+  }
+
+  private groupEventsByReference(events: any[]): EventGroup[] {
+    const groups = new Map<string, EventGroup>();
+    for (const event of events) {
+      const reference = String(event.reference ?? event.id ?? event.$id ?? 'unknown');
+      const key = event.reference ? `ref-${reference}` : reference;
+      if (!groups.has(key)) {
+        groups.set(key, {
+          id: key,
+          renderId: key,
+          reference,
+          title: event.reference ?? event.title ?? reference,
+          layerId: event.layerId,
+          events: [],
+          count: 0,
+          path: [],
+        });
+      }
+      groups.get(key)!.events.push(event);
+    }
+
+    for (const group of groups.values()) {
+      group.events.sort((a, b) => this.eventTime(a) - this.eventTime(b));
+      group.path = group.events
+        .map((event) => this.eventLatLng(event))
+        .filter((value): value is L.LatLngExpression => !!value);
+      group.count = group.events.length;
+      if (group.count === 1) {
+        const event = group.events[0];
+        group.renderId = event.id ?? event.$id ?? group.id;
+      }
+    }
+
+    return [...groups.values()];
+  }
+
+  private filterRelevantEventGroups(groups: EventGroup[]): EventGroup[] {
+    return groups;
+  }
+
+  private eventLatLng(event: any): L.LatLngExpression | null {
+    if (event.latitude != null && event.longitude != null) {
+      return [event.latitude, event.longitude];
+    }
+    if (event.geojson?.coordinates?.length === 2) {
+      const [lng, lat] = event.geojson.coordinates;
+      return [lat, lng];
+    }
+    return null;
+  }
+
+  private eventTime(event: any): number {
+    const value = event.eventAt ?? event.$createdAt ?? event.createdAt;
+    if (!value) return 0;
+    const time = new Date(value).getTime();
+    return Number.isFinite(time) ? time : 0;
   }
 
   private mergeRegions(regions: any[]) {
