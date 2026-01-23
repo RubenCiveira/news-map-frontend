@@ -7,10 +7,10 @@ import {
   debounceTime,
   distinctUntilChanged,
   Observable,
-  shareReplay,
   Subject,
   switchMap,
   tap,
+  finalize,
 } from 'rxjs';
 import { createLayersButtonControl } from './layers-button.control';
 import { TemplateService } from './template.service';
@@ -48,6 +48,11 @@ export class MapComponent implements AfterViewInit, OnDestroy {
   private viewport$ = new Subject<ViewPort>();
   private selectedLayerIds = new Set<string>();
 
+  private eventsLoadSeq = 0;
+  private activeEventsLoadSeq = 0;
+  private regionsLoadSeq = 0;
+  private activeRegionsLoadSeq = 0;
+
   constructor(
     private readonly geo: GeoService,
     private readonly time: TimeFilterService,
@@ -68,33 +73,51 @@ export class MapComponent implements AfterViewInit, OnDestroy {
       .pipe(
         debounceTime(200),
         distinctUntilChanged((a, b) => a[0].equals(b[0]) && a[1].equals(b[1])),
-        switchMap(([bbox, time]) =>
-          this.geo
+        switchMap(([bbox, time]) => {
+          const loadId = ++this.eventsLoadSeq;
+          this.activeEventsLoadSeq = loadId;
+          let latest: any[] = [];
+          return this.geo
             .getEventsInViewportDuringTime(bbox.bounds, time, this.currentLayers(), false)
             .pipe(
-              tap((reg) => {
-                console.log('IN MID', reg);
+              tap((events) => {
+                latest = events ?? [];
+                this.mergeEvents(latest);
               }),
-            ),
-        ),
-        shareReplay({ bufferSize: 1, refCount: true }),
+              finalize(() => {
+                if (this.activeEventsLoadSeq === loadId) {
+                  this.pruneEvents(latest);
+                }
+              }),
+            );
+        }),
       )
-      .subscribe((events) => this.renderEvents(events));
+      .subscribe();
 
     this.viewport$
       .pipe(
         debounceTime(200), // evita floods
         distinctUntilChanged((a, b) => a.equals(b)),
-        switchMap((bbox) =>
-          this.geo.getFeaturesInViewport(
-            bbox.bounds,
-            this.currentLayers(),
-            !this.regionStore.hasContent(),
-          ),
-        ),
-        shareReplay({ bufferSize: 1, refCount: true }),
+        switchMap((bbox) => {
+          const loadId = ++this.regionsLoadSeq;
+          this.activeRegionsLoadSeq = loadId;
+          let latest: any[] = [];
+          return this.geo
+            .getFeaturesInViewport(bbox.bounds, this.currentLayers(), !this.regionStore.hasContent())
+            .pipe(
+              tap((regions) => {
+                latest = regions ?? [];
+                this.mergeRegions(latest);
+              }),
+              finalize(() => {
+                if (this.activeRegionsLoadSeq === loadId) {
+                  this.pruneRegions(latest);
+                }
+              }),
+            );
+        }),
       )
-      .subscribe((regions) => this.renderRegions(regions));
+      .subscribe();
     this.reloadRegions();
     this.map.on('moveend zoomend', () => this.reloadRegions());
     this.map.on('click', (e) => this.onClick(e));
@@ -197,13 +220,7 @@ export class MapComponent implements AfterViewInit, OnDestroy {
     return result;
   }
 
-  private renderEvents(events: any[]) {
-    const currentLayers = this.currentLayers();
-    for (const el of this.eventStore.elements()) {
-      if (!currentLayers.includes(el.content.layerId)) {
-        this.eventStore.remove(el);
-      }
-    }
+  private mergeEvents(events: any[]) {
     for (const event of events) {
       const mapLayer = this.getLayer(event.layerId);
       const angulo = event.heading ?? 0;
@@ -222,14 +239,20 @@ export class MapComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  private renderRegions(regions: any[]) {
-    const currentLayers = this.currentLayers();
-    for (const el of this.regionStore.elements()) {
-      if (!currentLayers.includes(el.content.layerId)) {
-        this.regionStore.remove(el);
+  private pruneEvents(events: any[]) {
+    const currentLayers = new Set(this.currentLayers());
+    const ids = new Set(events.map((event) => event.id));
+    for (const el of this.eventStore.elements()) {
+      const layerId = el.content?.layerId;
+      if (!layerId || !currentLayers.has(layerId) || !ids.has(el.id)) {
+        this.eventStore.remove(el);
       }
     }
+  }
+
+  private mergeRegions(regions: any[]) {
     for (const region of regions) {
+      if (!region) continue;
       try {
         const mapLayer = this.getLayer(region.layerId);
         if (region.kind == 'point') {
@@ -263,6 +286,17 @@ export class MapComponent implements AfterViewInit, OnDestroy {
         }
       } catch (fail) {
         console.error('FAIL FOR ' + region.title);
+      }
+    }
+  }
+
+  private pruneRegions(regions: any[]) {
+    const currentLayers = new Set(this.currentLayers());
+    const ids = new Set(regions.filter(Boolean).map((region) => region.id));
+    for (const el of this.regionStore.elements()) {
+      const layerId = el.content?.layerId;
+      if (!layerId || !currentLayers.has(layerId) || !ids.has(el.id)) {
+        this.regionStore.remove(el);
       }
     }
   }
