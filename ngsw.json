@@ -1,6 +1,6 @@
 {
   "configVersion": 1,
-  "timestamp": 1768999465409,
+  "timestamp": 1769152739480,
   "index": "/news-map-frontend/index.html",
   "assetGroups": [
     {
@@ -11,11 +11,11 @@
         "ignoreVary": true
       },
       "urls": [
-        "/news-map-frontend/chunk-AD4GFWOF.js",
-        "/news-map-frontend/chunk-QDBJ37HY.js",
+        "/news-map-frontend/chunk-H2R4S2UA.js",
+        "/news-map-frontend/chunk-VF4TBB6O.js",
         "/news-map-frontend/favicon.ico",
         "/news-map-frontend/index.html",
-        "/news-map-frontend/main-V7X3J33O.js",
+        "/news-map-frontend/main-C7UYWROP.js",
         "/news-map-frontend/manifest.webmanifest",
         "/news-map-frontend/styles-QIX65NM4.css"
       ],
@@ -47,8 +47,8 @@
   ],
   "dataGroups": [],
   "hashTable": {
-    "/news-map-frontend/chunk-AD4GFWOF.js": "a4b3bb5d7277a0849f68e670a80b47dc4091906b",
-    "/news-map-frontend/chunk-QDBJ37HY.js": "4012c4b8693e18f0e796cc8240980b88354c5cca",
+    "/news-map-frontend/chunk-H2R4S2UA.js": "4fc6fe62e601526d347f72dcd5aa4f15884e7563",
+    "/news-map-frontend/chunk-VF4TBB6O.js": "894d666345a6d7493011cef17985d7d3ebfca459",
     "/news-map-frontend/favicon.ico": "9c39f434fe1261f68c5e3eefdf734630d99c5670",
     "/news-map-frontend/icons/icon-128x128.png": "f912963bdc6d5a38d8f1dd0afbaab2ce8d657acb",
     "/news-map-frontend/icons/icon-144x144.png": "b155fd5f2fd5d2ea7760721063003c4cd95fd783",
@@ -59,8 +59,8 @@
     "/news-map-frontend/icons/icon-72x72.png": "aa88a6096bd973be7f6d7a5489bfa6bc2463f8c4",
     "/news-map-frontend/icons/icon-96x96.png": "7fb8f59c30ce2ff12c700321a0b39e14b3dc8f95",
     "/news-map-frontend/img/plane.png": "a9107a856168b3821b4c60358720ce8775ff62c4",
-    "/news-map-frontend/index.html": "90b21ffbb3b54529b4e6676d826980efa6ab6b93",
-    "/news-map-frontend/main-V7X3J33O.js": "b4db5bdc84fbf584ec0f35ff9dbc2def4c9db12e",
+    "/news-map-frontend/index.html": "dff5830e8a762df397f22ad55bbaf47465ca28ab",
+    "/news-map-frontend/main-C7UYWROP.js": "363aa90fca8da47f40e508b5c282177025b8acd7",
     "/news-map-frontend/manifest.webmanifest": "4fd853d03e42c56597fa14aa9cf43a7210cdb689",
     "/news-map-frontend/media/layers-2x-TBM42ERR.png": "152a162333e46d24f9d89f566312fc0c64011dee",
     "/news-map-frontend/media/layers-55W3Q4RM.png": "c9e7528e491a39232ba24a2706c6c739d6fb0f06",
