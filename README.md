@@ -1,7 +1,7 @@
 # News Map Frontend (Angular + Material + Leaflet + Appwrite)
 
-Frontend para un **mapa mundi de noticias** con marcadores sobre un mapa (Leaflet) y una UI moderna (Angular Material).
-El backend previsto es **Appwrite 1.8.x** usando **GeoJSON** para almacenar y consultar noticias georreferenciadas.
+Este repositorio contiene el frontend del **mapa global de noticias**, con marcadores sobre Leaflet y una interfaz moderna basada en Angular Material.
+La plataforma se integra con **Appwrite 1.8.x** y utiliza **GeoJSON** para almacenar y consultar noticias georreferenciadas.
 
 ## Stack
 
@@ -16,7 +16,7 @@ El backend previsto es **Appwrite 1.8.x** usando **GeoJSON** para almacenar y co
 - Node.js (LTS recomendado)
 - pnpm (recomendado)
 
-Instalar pnpm:
+Instalacion de pnpm:
 
 ```bash
 npm i -g pnpm
@@ -24,7 +24,7 @@ npm i -g pnpm
 
 ## Configuración (Appwrite)
 
-Configura el endpoint y el projectId en:
+Configura el endpoint y el projectId en los siguientes entornos:
 
 - `src/environments/environment.ts` (dev)
 - `src/environments/environment.prod.ts` (prod)
@@ -43,7 +43,7 @@ export const environment = {
 
 En la consola de Appwrite:
 - Project → Platforms → **Add platform → Web**
-- Añade como host permitido: `http://localhost:4200` (o el que uses)
+- Añade como host permitido: `http://localhost:4200` (o el que corresponda)
 
 ## Instalación
 
@@ -51,13 +51,13 @@ En la consola de Appwrite:
 pnpm install
 ```
 
-## Ejecutar en desarrollo
+## Ejecucion en desarrollo
 
 ```bash
 pnpm start
 ```
 
-Abrir:
+Acceso local:
 - http://localhost:4200
 
 ## Build
@@ -68,7 +68,7 @@ pnpm build
 
 Los artefactos se generan en `dist/`.
 
-## Estructura sugerida
+## Estructura recomendada
 
 ```
 src/app
@@ -81,14 +81,14 @@ src/app
   shared/             # modelos y utilidades comunes
 ```
 
-## Flujo de autenticación (resumen)
+## Flujo de autenticacion (resumen)
 
-- Click en **Login** (toolbar)
-- Diálogo de login (email/password u OAuth)
+- Seleccion de **Login** desde la barra superior
+- Dialogo de acceso (email/password u OAuth)
 - Al autenticar, se recupera el usuario desde Appwrite (`account.get()`)
-- El usuario se guarda en el estado global de la app
+- El usuario se guarda en el estado global de la aplicacion
 
-## Scripts útiles
+## Scripts utiles
 
 ```bash
 pnpm start
@@ -107,4 +107,4 @@ pnpm build
 
 ## Licencia
 
-Este proyecto está licenciado bajo **Apache License 2.0**. Ver [LICENSE](LICENSE).
+Este proyecto esta licenciado bajo **Apache License 2.0**. Ver [LICENSE](LICENSE).

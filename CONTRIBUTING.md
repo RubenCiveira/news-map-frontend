@@ -1,23 +1,23 @@
-# Contributing
+# Guia de contribucion
 
-Gracias por querer contribuir.
+Gracias por el interes en colaborar con el proyecto. Esta guia establece las pautas para mantener una colaboracion consistente y profesional.
 
 ## Requisitos
 - Node.js (LTS recomendado)
 - pnpm
 
-## Desarrollo
+## Desarrollo local
 ```bash
 pnpm install
 pnpm start
 ```
 
-## Estilo
+## Estilo y arquitectura
 - TypeScript + Angular standalone
-- Preferir componentes y servicios pequeños, cohesionados
-- Evitar acoplar UI con infraestructura (Appwrite) directamente
+- Preferir componentes y servicios pequenos y cohesionados
+- Evitar acoplar la UI con la infraestructura (Appwrite) de forma directa
 
-## Pull Requests
-1. Crea una rama desde `main`
-2. Asegura que compila y pasa tests/lint
-3. Describe claramente el cambio y el motivo
+## Pull requests
+1. Crea una rama desde `master`
+2. Verifica que el proyecto compila y pasa pruebas y lint
+3. Describe claramente el cambio, el objetivo y el impacto
